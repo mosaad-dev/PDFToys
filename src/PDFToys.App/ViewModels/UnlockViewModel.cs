@@ -55,5 +55,11 @@ public sealed class UnlockViewModel : OperationViewModelBase
     }
     private Task ProcessAsync(IReadOnlyList<string> inputs, string password, bool replace) => RunBatchAsync("Unlock", inputs,
         input => _service.Unlock(new PdfFile(input), new UnlockOptions(password, OutputDirectory(input), replace)),
-        failed => ProcessAsync(failed, password, replace));
+        RetryProcessAsync);
+    private Task RetryProcessAsync(IReadOnlyList<string> inputs)
+    {
+        if (string.IsNullOrWhiteSpace(Password)) { StatusMessage = "Password is required."; return Task.CompletedTask; }
+        // A retry is a new job: use the corrected password and output choice shown in the form.
+        return ProcessAsync(inputs, Password, OutputMode.SelectedOutputMode == PdfOutputMode.ReplaceOriginal);
+    }
 }

@@ -233,6 +233,24 @@ public sealed class OperationWorkflowViewModelTests
     }
 
     [Fact]
+    public async Task UnlockRetry_SnapshotsCorrectedPasswordAndCurrentOutputChoice()
+    {
+        var service = new PasswordStub();
+        var vm = new UnlockViewModel(service, new DialogStub(), () => { }, ["good.pdf", "bad.pdf"], runner: new ApplicationJobRunner());
+        vm.Password = "first";
+        await vm.ExecuteUnlockCommand.ExecuteAsync(null);
+        vm.Password = "corrected";
+        vm.OutputMode.ApplyMode(PdfOutputMode.ReplaceOriginal);
+        await vm.RetryFailedCommand.ExecuteAsync(null);
+        Assert.Equal(3, service.Calls.Count);
+        Assert.Equal("bad.pdf", service.Calls[^1].Path);
+        Assert.Equal("corrected", service.Calls[^1].Options.Password);
+        Assert.True(service.Calls[^1].Options.ReplaceOriginal);
+        Assert.Equal(2, vm.Results.Count);
+        Assert.All(vm.Results, r => Assert.True(r.Result.IsSuccess));
+    }
+
+    [Fact]
     public async Task ConversionSummary_CountsEveryOriginalInput()
     {
         var conversion = new ConversionStub { Fail = false };
@@ -330,6 +348,16 @@ public sealed class OperationWorkflowViewModelTests
     { public UserSettings Load() => new(); public void Save(UserSettings settings) => throw new IOException("Read-only settings file."); }
     private sealed class CompressionStub(Func<PdfFile, CompressionOptions, OperationResult> handler) : ICompressionService
     { public OperationResult Compress(PdfFile input, CompressionOptions options) => handler(input, options); }
+    private sealed class PasswordStub : IProtectService
+    {
+        public List<(string Path, UnlockOptions Options)> Calls { get; } = [];
+        public OperationResult Protect(PdfFile input, ProtectOptions options) => throw new NotSupportedException();
+        public OperationResult Unlock(PdfFile input, UnlockOptions options)
+        {
+            Calls.Add((input.FilePath, options));
+            return input.FilePath == "bad.pdf" && options.Password != "corrected" ? new(false, "", "Incorrect password.") : new(true, input.FilePath + "_unlocked", "");
+        }
+    }
     private sealed class ConversionStub : IConversionService
     {
         public bool Fail { get; set; } = true; public List<string> Calls { get; } = [];
