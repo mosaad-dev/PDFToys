@@ -287,7 +287,7 @@ public sealed class CompressionRegressionTests : PdfTestBase
         var bytes = File.ReadAllBytes(source);
         var result = Compress(source);
         Assert.False(result.IsSuccess);
-        Assert.Equal("signed-pdf", result.ErrorCode);
+        Assert.Equal("UnsupportedDocumentFeatures", result.ErrorCode);
         Assert.Empty(result.Outputs);
         Assert.Equal(bytes, File.ReadAllBytes(source));
         Assert.False(File.Exists(Path.Combine(TempDirectory, "signature_Compressed.pdf")));

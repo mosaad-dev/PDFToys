@@ -28,9 +28,8 @@ public sealed class CompressionService : ServiceBase, ICompressionService
         if (document.SecuritySettings.IsEncrypted)
             return new(false, string.Empty, "Unlock this PDF before compressing it; encryption settings cannot be retained by this operation.")
                 { ErrorCode = "encrypted-pdf" };
-        if (HasSignature(document))
-            return new(false, string.Empty, "This PDF contains a digital signature or signature field. Compression would invalidate its signature; use an unsigned copy.")
-                { ErrorCode = "signed-pdf" };
+        var documentSafetyError = PdfDocumentSafety.CheckRewrite(document);
+        if (documentSafetyError is not null) return documentSafetyError;
 
         var originalSize = new FileInfo(input.FilePath).Length;
         var reasons = new List<string>();
@@ -133,12 +132,6 @@ public sealed class CompressionService : ServiceBase, ICompressionService
             Compression = new(originalSize, candidateSize, finalSize, processed, changed, processed - changed, reasons.ToArray())
         };
     });
-
-    private static bool HasSignature(PdfDocument document) => document.Internals.GetAllObjects()
-        .OfType<PdfDictionary>().Any(dictionary =>
-            dictionary.Elements.ContainsKey("/ByteRange") ||
-            (PdfImageDecoder.Resolve(dictionary.Elements["/Type"]) as PdfName)?.Value == "/Sig" ||
-            (PdfImageDecoder.Resolve(dictionary.Elements["/FT"]) as PdfName)?.Value == "/Sig");
 
     private static void AddDistinct(List<string> messages, string message)
     {
