@@ -56,14 +56,7 @@ public sealed class HomeViewModel : ViewModelBase
         }
 
         CurrentWorkspace = directoryPath;
-        foreach (var pdfPath in Directory.GetFiles(directoryPath, "*.pdf"))
-        {
-            var fileName = Path.GetFileName(pdfPath);
-            if (!string.IsNullOrWhiteSpace(fileName))
-            {
-                AvailableFiles.Add(fileName);
-            }
-        }
+
     }
 
     public string Message => "Open a PDF tool for this workspace";

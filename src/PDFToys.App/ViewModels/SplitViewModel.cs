@@ -33,7 +33,7 @@ public sealed class SplitViewModel : OperationViewModelBase
         set { if (_selectedFilePath == value) return; _selectedFilePath = value; _pageCount = null; OnPropertyChanged(); OnPropertyChanged(nameof(SelectedFileLabel)); OnPropertyChanged(nameof(PageCountLabel)); }
     }
     public string SelectedFileLabel => string.IsNullOrWhiteSpace(SelectedFilePath) ? "No PDF selected" : SelectedFilePath;
-    public string PageCountLabel => _pageCount is { } count ? $"{count} pages" : "Choose a PDF to see its page count.";
+    public string PageCountLabel => _pageCount is { } count ? $"{count} {(count == 1 ? "page" : "pages")}" : "Choose a PDF to see its page count.";
     public string CustomRangeText { get => _customRangeText; set { _customRangeText = value; OnPropertyChanged(); } }
     public IAsyncRelayCommand SelectPdfCommand { get; }
     public IAsyncRelayCommand<string> SplitPresetCommand { get; }
