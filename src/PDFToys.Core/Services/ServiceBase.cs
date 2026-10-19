@@ -11,7 +11,12 @@ public abstract class ServiceBase
     {
         try
         {
+            OperationContext.ThrowIfCancellationRequested();
             return operation();
+        }
+        catch (OperationCanceledException)
+        {
+            return OperationResult.Cancelled();
         }
         catch (Exception ex)
         {
@@ -132,6 +137,6 @@ public abstract class ServiceBase
     {
         Directory.CreateDirectory(outputDirectory);
         var originalFileName = Path.GetFileNameWithoutExtension(inputPath);
-        return Path.Combine(outputDirectory, $"{originalFileName}_{suffix}.pdf");
+        return SafeOutputFiles.GetUniquePath(Path.Combine(outputDirectory, $"{originalFileName}_{suffix}.pdf"));
     }
 }
