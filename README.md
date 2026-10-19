@@ -52,7 +52,7 @@ To merge PDFs:
 
 Developer requirements:
 
-- .NET 9 SDK for the app and tests
+- .NET 10 SDK for the app and tests
 - Visual Studio C++ build tools with ATL support for the native shell extension
 - Inno Setup only if compiling the installer
 
