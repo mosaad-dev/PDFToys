@@ -33,14 +33,16 @@ public sealed class ExportService(IEnumerable<IExportStrategy> strategies) : Ser
                 ? BuildSingleOutputFolderPath(inputs[0].FilePath, options)
                 : BuildBatchOutputFolderPath(options);
 
-            Directory.CreateDirectory(outputFolder);
-
             var strategy = _strategies.FirstOrDefault(s => s.CanHandle(options.Format));
             if (strategy == null)
             {
                 return new OperationResult(false, string.Empty, $"Unsupported export format: {options.Format}");
             }
 
+            OperationContext.ThrowIfCancellationRequested();
+            // A new job owns a new directory. Previous exports are never mixed with this run.
+            outputFolder += "_" + Guid.NewGuid().ToString("N");
+            Directory.CreateDirectory(outputFolder);
             return strategy.Execute(inputs, options, outputFolder);
         });
     }

@@ -1,6 +1,7 @@
-﻿using PDFToys.App.Models;
+using PDFToys.App.Models;
 using PDFToys.Core.Contracts;
 using PDFToys.Core.Models;
+using PDFToys.Core.Services;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -18,18 +19,14 @@ public sealed record HeadlessExecutionResult(
 
 public sealed class HeadlessConversionExecutor
 {
-    private readonly IConversionService _conversionService;
-    private readonly IMergeService _mergeService;
-    private readonly IExportService _exportService;
+    private readonly ConversionWorkflowService _workflow;
 
     public HeadlessConversionExecutor(
         IConversionService conversionService,
         IMergeService mergeService,
         IExportService exportService)
     {
-        _conversionService = conversionService;
-        _mergeService = mergeService;
-        _exportService = exportService;
+        _workflow = new ConversionWorkflowService(conversionService, mergeService, exportService);
     }
 
     public HeadlessExecutionResult Execute(StartupRoute route)
@@ -67,186 +64,29 @@ public sealed class HeadlessConversionExecutor
 
     private int ExecuteByOperation(StartupRoute route, List<string> outputs, List<string> errors)
     {
-        return route.Operation switch
+        ConversionJob? job = route.Operation switch
         {
-            PdfToysOperation.ConvertToPdf => ExecuteConvertToPdf(route.Inputs.First(), outputs, errors),
-            PdfToysOperation.CombineToPdf => ExecuteCombineToPdf(route.Inputs, outputs, errors),
-            PdfToysOperation.ConvertEachToPdf => ExecuteConvertEachToPdf(route.Inputs, outputs, errors),
-            PdfToysOperation.PdfToJpg => ExecuteExportFromPdf(route.Inputs, PdfExportFormat.Jpg, outputs, errors),
-            PdfToysOperation.PdfToJpeg => ExecuteExportFromPdf(route.Inputs, PdfExportFormat.Jpeg, outputs, errors),
-            PdfToysOperation.PdfToPng => ExecuteExportFromPdf(route.Inputs, PdfExportFormat.Png, outputs, errors),
-            PdfToysOperation.PdfToMarkdown => ExecuteExportFromPdf(route.Inputs, PdfExportFormat.Markdown, outputs, errors),
-            PdfToysOperation.ConvertFromPdf => ReportConvertFromPdfError(errors, route.TargetFormat),
-            _ => 2
+            PdfToysOperation.ConvertToPdf => new(ConversionJobKind.ConvertToPdf, route.Inputs),
+            PdfToysOperation.CombineToPdf => new(ConversionJobKind.CombineToPdf, route.Inputs),
+            PdfToysOperation.ConvertEachToPdf => new(ConversionJobKind.ConvertEachToPdf, route.Inputs),
+            PdfToysOperation.PdfToJpg => new(ConversionJobKind.Export, route.Inputs, format: PdfExportFormat.Jpg),
+            PdfToysOperation.PdfToJpeg => new(ConversionJobKind.Export, route.Inputs, format: PdfExportFormat.Jpeg),
+            PdfToysOperation.PdfToPng => new(ConversionJobKind.Export, route.Inputs, format: PdfExportFormat.Png),
+            PdfToysOperation.PdfToMarkdown => new(ConversionJobKind.Export, route.Inputs, format: PdfExportFormat.Markdown),
+            _ => null
         };
-    }
-
-    private static int ReportConvertFromPdfError(List<string> errors, string? targetFormat)
-    {
-        if (string.IsNullOrWhiteSpace(targetFormat))
+        if (job is null)
         {
-            errors.Add("convert-from-pdf requires --target (jpg, jpeg, png, markdown, or md).");
-        }
-        else
-        {
-            errors.Add($"Unsupported convert-from-pdf target '{targetFormat}'. Use jpg, jpeg, png, markdown, or md.");
-        }
-
-        return 2;
-    }
-
-    private int ExecuteConvertToPdf(string input, List<string> outputs, List<string> errors)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            errors.Add("Invalid input path for to-pdf.");
+            errors.Add(route.Operation == PdfToysOperation.ConvertFromPdf
+                ? "convert-from-pdf requires a supported --target (jpg, jpeg, png, markdown, or md)."
+                : "Unsupported conversion operation.");
             return 2;
         }
-
-        var outputDirectory = ResolveOutputDirectory(input);
-        var result = _conversionService.Convert(input, new ConversionOptions(outputDirectory));
-        if (!result.IsSuccess)
-        {
-            errors.Add(result.ErrorMessage);
-            return 1;
-        }
-
-        if (!string.IsNullOrWhiteSpace(result.OutputPath))
-        {
-            outputs.Add(result.OutputPath);
-        }
-
-        return 0;
+        var result = _workflow.Execute(job);
+        outputs.AddRange(result.Outputs.Select(output => output.Path));
+        if (!result.IsSuccess) errors.Add(result.ErrorMessage);
+        return result.IsSuccess ? 0 : 1;
     }
-
-    private int ExecuteConvertEachToPdf(IReadOnlyList<string> inputs, List<string> outputs, List<string> errors)
-    {
-        var failed = false;
-        foreach (var input in inputs)
-        {
-            var code = ExecuteConvertToPdf(input, outputs, errors);
-            if (code != 0)
-            {
-                failed = true;
-            }
-        }
-
-        return failed ? 1 : 0;
-    }
-
-    private int ExecuteCombineToPdf(IReadOnlyList<string> inputs, List<string> outputs, List<string> errors)
-    {
-        var convertedPdfPaths = new List<string>();
-        var tempDirectory = Path.Combine(Path.GetTempPath(), $"pdftoys-combine-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDirectory);
-
-        try
-        {
-            foreach (var input in inputs)
-            {
-                var conversionResult = _conversionService.Convert(input, new ConversionOptions(tempDirectory));
-                if (!conversionResult.IsSuccess || string.IsNullOrWhiteSpace(conversionResult.OutputPath))
-                {
-                    errors.Add(conversionResult.ErrorMessage);
-                    return 1;
-                }
-
-                convertedPdfPaths.Add(conversionResult.OutputPath);
-            }
-
-            if (convertedPdfPaths.Count == 0)
-            {
-                errors.Add("No converted files available to combine.");
-                return 2;
-            }
-
-            var mergeOutputDirectory = ResolveOutputDirectory(inputs[0]);
-            var mergedName = $"combined_{DateTime.UtcNow:yyyyMMdd_HHmmss}.pdf";
-            var mergeResult = _mergeService.Merge(
-                convertedPdfPaths.Select(path => new PdfFile(path)).ToArray(),
-                new MergeOptions(mergeOutputDirectory, mergedName));
-            if (!mergeResult.IsSuccess)
-            {
-                errors.Add(mergeResult.ErrorMessage);
-                return 1;
-            }
-
-            if (!string.IsNullOrWhiteSpace(mergeResult.OutputPath))
-            {
-                outputs.Add(mergeResult.OutputPath);
-            }
-
-            return 0;
-        }
-        finally
-        {
-            TryDeleteDirectory(tempDirectory);
-        }
-    }
-
-    private int ExecuteExportFromPdf(
-        IReadOnlyList<string> inputs,
-        PdfExportFormat format,
-        List<string> outputs,
-        List<string> errors)
-    {
-        var validInputs = inputs.Where(input => !string.IsNullOrWhiteSpace(input)).ToList();
-        if (validInputs.Count == 0)
-        {
-            errors.Add("Invalid input PDF path.");
-            return 2;
-        }
-
-        if (validInputs.Count != inputs.Count)
-        {
-            errors.Add("Invalid input PDF path.");
-        }
-
-        if (validInputs.Count == 1)
-        {
-            var input = validInputs[0];
-            var outputDirectory = ResolveOutputDirectory(input);
-            var exportResult = _exportService.Export(
-                [new PdfFile(input)],
-                new ExportOptions(outputDirectory, format));
-            if (!exportResult.IsSuccess || string.IsNullOrWhiteSpace(exportResult.OutputPath))
-            {
-                errors.Add(exportResult.ErrorMessage);
-                return 1;
-            }
-
-            outputs.Add(exportResult.OutputPath);
-            return validInputs.Count == inputs.Count ? 0 : 1;
-        }
-
-        var batchOutputDirectory = ResolveOutputDirectory(validInputs[0]);
-        var batchResult = _exportService.Export(
-            validInputs.Select(path => new PdfFile(path)).ToList(),
-            new ExportOptions(batchOutputDirectory, format));
-        if (!batchResult.IsSuccess || string.IsNullOrWhiteSpace(batchResult.OutputPath))
-        {
-            errors.Add(batchResult.ErrorMessage);
-            return 1;
-        }
-
-        outputs.Add(batchResult.OutputPath);
-        return validInputs.Count == inputs.Count ? 0 : 1;
-    }
-
-    private static string ResolveOutputDirectory(string inputPath)
-    {
-        if (!string.IsNullOrWhiteSpace(inputPath))
-        {
-            var directory = Path.GetDirectoryName(inputPath);
-            if (!string.IsNullOrWhiteSpace(directory))
-            {
-                return directory;
-            }
-        }
-
-        return Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-    }
-
     private static string WriteLog(StartupRoute route, IReadOnlyList<string> outputs, IReadOnlyList<string> errors, int exitCode)
     {
         // Headless logs record paths and error messages only — never passwords or secrets.
@@ -288,20 +128,5 @@ public sealed class HeadlessConversionExecutor
         return logPath;
     }
 
-    private static void TryDeleteDirectory(string path)
-    {
-        if (!Directory.Exists(path))
-        {
-            return;
-        }
-
-        try
-        {
-            Directory.Delete(path, recursive: true);
-        }
-        catch
-        {
-            // Best-effort cleanup for temporary combine artifacts.
-        }
-    }
 }
+

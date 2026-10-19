@@ -9,13 +9,17 @@ public sealed class ConversionWorkflowService(IConversionService conversion, IMe
     public OperationResult Execute(ConversionJob job)
     {
         ArgumentNullException.ThrowIfNull(job);
+        if (!Enum.IsDefined(job.Kind)) return new(false, "", "Unsupported conversion operation.") { ErrorCode = "InvalidOperation" };
         if (job.Inputs.Count == 0) return new(false, "", "At least one input is required.");
+        if (job.Inputs.Any(string.IsNullOrWhiteSpace)) return new(false, "", "Input file paths cannot be empty.") { ErrorCode = "InvalidInput" };
+        if (job.Kind == ConversionJobKind.ConvertToPdf && job.Inputs.Count != 1) return new(false, "", "Convert to PDF requires exactly one input.") { ErrorCode = "InvalidInputCount" };
+        if (job.Kind == ConversionJobKind.Export && !Enum.IsDefined(job.Format)) return new(false, "", "Unsupported export format.") { ErrorCode = "InvalidFormat" };
         if (job.Kind == ConversionJobKind.CombineToPdf) return Combine(job);
         var files = new List<FileOperationResult>();
-        var inputs = job.Kind == ConversionJobKind.ConvertToPdf ? job.Inputs.Take(1) : job.Inputs;
+        var inputs = job.Inputs;
         foreach (var input in inputs)
         {
-            if (OperationContext.CancellationToken.IsCancellationRequested) return Aggregate(files, true);
+            if (OperationContext.CancellationToken.IsCancellationRequested) return Aggregate(files, true, job.Inputs);
             OperationContext.Report(new("Processing file", input, files.Count, job.Inputs.Count));
             OperationResult result;
             try
@@ -25,10 +29,10 @@ public sealed class ConversionWorkflowService(IConversionService conversion, IMe
                     ? export.Export([new PdfFile(input)], new ExportOptions(destination, job.Format))
                     : conversion.Convert(input, new ConversionOptions(destination));
             }
-            catch (OperationCanceledException) { return Aggregate(files, true); }
+            catch (OperationCanceledException) { return Aggregate(files, true, job.Inputs); }
             catch (Exception ex) { result = new(false, "", ex.Message) { ErrorCode = "OperationFailed" }; }
             files.Add(new(input, result));
-            if (result.Outcome == OperationOutcome.Cancelled) return Aggregate(files, true);
+            if (result.Outcome == OperationOutcome.Cancelled) return Aggregate(files, true, job.Inputs);
             OperationContext.Report(new("File complete", input, files.Count, job.Inputs.Count));
         }
         return Aggregate(files, false);
@@ -44,7 +48,7 @@ public sealed class ConversionWorkflowService(IConversionService conversion, IMe
         {
             for (var index = 0; index < job.Inputs.Count; index++)
             {
-                if (OperationContext.CancellationToken.IsCancellationRequested) return Aggregate(files, true);
+                if (OperationContext.CancellationToken.IsCancellationRequested) return CombineStopped(job, "Combination cancelled before output was committed.", true);
                 var input = job.Inputs[index];
                 OperationContext.Report(new("Preparing document to combine", input, index, job.Inputs.Count));
                 // Every source owns a distinct intermediate directory, even identical basenames or repeated selections.
@@ -56,7 +60,7 @@ public sealed class ConversionWorkflowService(IConversionService conversion, IMe
                 if (!result.IsSuccess)
                 {
                     files.Add(new(input, result));
-                    return Aggregate(files, result.Outcome == OperationOutcome.Cancelled);
+                    return CombineStopped(job, result.ErrorMessage, result.Outcome == OperationOutcome.Cancelled);
                 }
                 converted.Add(new(result.OutputPath));
                 // Intermediate files are deliberately absent from the public output manifest.
@@ -64,18 +68,27 @@ public sealed class ConversionWorkflowService(IConversionService conversion, IMe
             }
             OperationContext.ThrowIfCancellationRequested();
             var merged = merge.Merge(converted, new MergeOptions(ResolveOutputDirectory(job.Inputs[0], job.OutputDirectory), "combined.pdf"));
-            return merged with { Files = files.ToArray() };
+            return merged with { Files = job.Inputs.Select(input => new FileOperationResult(input, merged)).ToArray() };
         }
-        catch (OperationCanceledException) { return Aggregate(files, true); }
-        catch (Exception ex) { return new(false, "", ex.Message) { Files = files.ToArray(), ErrorCode = "CombineFailed" }; }
+        catch (OperationCanceledException) { return CombineStopped(job, "Combination cancelled before output was committed.", true); }
+        catch (Exception ex) { return CombineStopped(job, ex.Message, false); }
         finally
         {
             try { Directory.Delete(temp, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
     }
 
-    private static OperationResult Aggregate(IReadOnlyList<FileOperationResult> files, bool cancelled)
+    private static OperationResult CombineStopped(ConversionJob job, string message, bool cancelled)
     {
+        var failure = cancelled ? OperationResult.Cancelled(message) : new OperationResult(false, "", message) { ErrorCode = "CombineFailed" };
+        return failure with { Files = job.Inputs.Select(input => new FileOperationResult(input, failure)).ToArray() };
+    }
+
+    private static OperationResult Aggregate(IReadOnlyList<FileOperationResult> files, bool cancelled, IReadOnlyList<string>? inputs = null)
+    {
+        if (cancelled && inputs is not null && files.Count < inputs.Count)
+            files = files.Concat(inputs.Skip(files.Count).Select(input => new FileOperationResult(input,
+                OperationResult.Cancelled("Cancelled before this input was processed.")))).ToArray();
         var outputs = files.SelectMany(file => file.Result.Outputs).ToArray();
         var failed = files.Where(file => !file.Result.IsSuccess).ToArray();
         var outcome = cancelled ? OperationOutcome.Cancelled
