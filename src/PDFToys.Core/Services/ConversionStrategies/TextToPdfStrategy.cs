@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using PdfSharp.Drawing;
 using PdfSharp.Pdf;
 using PDFToys.Core.Models;
@@ -30,8 +30,8 @@ public sealed class TextToPdfStrategy : BaseConversionStrategy
         var lines = WrapText(text, font, contentWidth);
 
         var page = document.AddPage();
-        page.Width = A4WidthPoints;
-        page.Height = A4HeightPoints;
+        page.Width = XUnit.FromPoint(A4WidthPoints);
+        page.Height = XUnit.FromPoint(A4HeightPoints);
         var gfx = XGraphics.FromPdfPage(page);
         var y = MarginPoints;
 
@@ -39,12 +39,13 @@ public sealed class TextToPdfStrategy : BaseConversionStrategy
         {
             foreach (var line in lines)
             {
+                OperationContext.ThrowIfCancellationRequested();
                 if (y + lineHeight > A4HeightPoints - MarginPoints)
                 {
                     gfx.Dispose();
                     page = document.AddPage();
-                    page.Width = A4WidthPoints;
-                    page.Height = A4HeightPoints;
+                    page.Width = XUnit.FromPoint(A4WidthPoints);
+                    page.Height = XUnit.FromPoint(A4HeightPoints);
                     gfx = XGraphics.FromPdfPage(page);
                     y = MarginPoints;
                 }
@@ -58,6 +59,7 @@ public sealed class TextToPdfStrategy : BaseConversionStrategy
             gfx.Dispose();
         }
 
+        OperationContext.ThrowIfCancellationRequested();
         document.Save(outputFilePath);
         return new OperationResult(true, Path.GetFullPath(outputFilePath), string.Empty);
     }

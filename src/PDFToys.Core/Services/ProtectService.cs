@@ -17,7 +17,7 @@ public sealed class ProtectService : ServiceBase, IProtectService
     {
         return ExecuteSafe(() =>
         {
-            // Validation
+            if (options is null) return new(false, "", "Options are required.");
             var validationError = ValidateStandardInputs(input, options.OutputDirectory);
             if (validationError != null)
             {
@@ -29,13 +29,17 @@ public sealed class ProtectService : ServiceBase, IProtectService
                 return new OperationResult(false, string.Empty, "Password is required.");
             }
 
-            var outputPath = PrepareOutputEnvironment(input.FilePath, options.OutputDirectory, "Protected");
+            OperationContext.ThrowIfCancellationRequested();
+            OperationContext.Report(new("Protecting document", input.FilePath));
+            using var transaction = OutputFileTransaction.CreatePdf(input.FilePath, options.OutputDirectory, "Protected");
 
             using var document = PdfReader.Open(input.FilePath, PdfDocumentOpenMode.Modify);
+            var compatibility = PdfDocumentSafety.CheckRewrite(document);
+            if (compatibility is not null) return compatibility;
             document.SecuritySettings.UserPassword = options.Password;
-            document.Save(outputPath);
-
-            return new OperationResult(true, Path.GetFullPath(outputPath), string.Empty);
+            document.Save(transaction.CandidatePath);
+            var outputPath = transaction.CommitPdf(options.Password);
+            return Complete(input.FilePath, outputPath, options.ReplaceOriginal, options.Password);
         });
     }
 
@@ -43,7 +47,7 @@ public sealed class ProtectService : ServiceBase, IProtectService
     {
         return ExecuteSafe(() =>
         {
-            // Validation
+            if (options is null) return new(false, "", "Options are required.");
             var validationError = ValidateStandardInputs(input, options.OutputDirectory);
             if (validationError != null)
             {
@@ -55,19 +59,30 @@ public sealed class ProtectService : ServiceBase, IProtectService
                 return new OperationResult(false, string.Empty, "Password is required.");
             }
 
-            var outputPath = PrepareOutputEnvironment(input.FilePath, options.OutputDirectory, "Unlocked");
+            OperationContext.ThrowIfCancellationRequested();
+            OperationContext.Report(new("Unlocking document", input.FilePath));
+            using var transaction = OutputFileTransaction.CreatePdf(input.FilePath, options.OutputDirectory, "Unlocked");
             
-            using var inputDocument = PdfReader.Open(input.FilePath, options.Password, PdfDocumentOpenMode.Import);
-            using var outputDocument = new PdfDocument();
-
-            foreach (var page in inputDocument.Pages)
-            {
-                outputDocument.AddPage(page);
-            }
-
-            outputDocument.Save(outputPath);
-
-            return new OperationResult(true, Path.GetFullPath(outputPath), string.Empty);
+            using var inputDocument = PdfReader.Open(input.FilePath, options.Password, PdfDocumentOpenMode.Modify);
+            var compatibility = PdfDocumentSafety.CheckRewrite(inputDocument);
+            if (compatibility is not null) return compatibility;
+            inputDocument.SecurityHandler.SetEncryptionToNoneAndResetPasswords();
+            inputDocument.Save(transaction.CandidatePath);
+            var outputPath = transaction.CommitPdf();
+            return Complete(input.FilePath, outputPath, options.ReplaceOriginal, null);
         });
+    }
+
+    private static OperationResult Complete(string input, string output, bool replaceOriginal, string? password)
+    {
+        if (!replaceOriginal) return new(true, output, "");
+        if (SafeOutputFiles.TryReplaceOriginal(output, input, out var backup, out var error, password))
+            return new(true, input, "") { Warnings = [$"Recovery backup: {backup}"] };
+        return new(false, output, $"The original was preserved. The generated copy is available at {output}. {error}")
+        {
+            ErrorCode = "ReplacementFailed",
+            Outcome = OperationOutcome.PartialSuccess,
+            Outputs = [new(output)]
+        };
     }
 }

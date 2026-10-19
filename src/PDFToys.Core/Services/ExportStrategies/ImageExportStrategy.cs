@@ -1,51 +1,50 @@
-﻿using PDFToys.Core.Models;
+using PDFToys.Core.Models;
 using SkiaSharp;
 
 namespace PDFToys.Core.Services.ExportStrategies;
 
 public sealed class ImageExportStrategy : ExportStrategyBase
 {
-    public override bool CanHandle(PdfExportFormat format) =>
-        format is PdfExportFormat.Png or PdfExportFormat.Jpg or PdfExportFormat.Jpeg;
+    public override bool CanHandle(PdfExportFormat format) => format is PdfExportFormat.Png or PdfExportFormat.Jpg or PdfExportFormat.Jpeg;
 
     public override OperationResult Execute(IReadOnlyList<PdfFile> inputs, ExportOptions options, string outputFolder)
     {
-        var (imageFormat, extension) = options.Format switch
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+            return new(false, "", "Image export is unavailable on this platform.");
+        var (format, extension) = options.Format switch
         {
             PdfExportFormat.Png => (SKEncodedImageFormat.Png, "png"),
             PdfExportFormat.Jpg => (SKEncodedImageFormat.Jpeg, "jpg"),
             PdfExportFormat.Jpeg => (SKEncodedImageFormat.Jpeg, "jpeg"),
-            _ => throw new InvalidOperationException($"Unexpected format: {options.Format}")
+            _ => throw new InvalidOperationException("Unsupported image format.")
         };
-
-        var useSourcePrefix = inputs.Count > 1;
-        var exportedPages = 0;
-
-        foreach (var input in inputs)
+        return ExportInputs(inputs, outputFolder, (input, inputIndex, outputs) =>
         {
-            var sourcePrefix = SanitizeSourceName(input.FilePath);
-            var pdfBytes = File.ReadAllBytes(input.FilePath);
+            if (!OperatingSystem.IsWindows() && !OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+                throw new PlatformNotSupportedException("Image export is unavailable on this platform.");
+            OperationContext.ThrowIfCancellationRequested();
+            var bytes = File.ReadAllBytes(input.FilePath);
             var pageIndex = 1;
-
-            foreach (var bitmap in PDFtoImage.Conversion.ToImages(pdfBytes))
+            foreach (var bitmap in PDFtoImage.Conversion.ToImages(bytes))
             {
-                var fileName = useSourcePrefix
-                    ? $"{sourcePrefix}_page_{pageIndex:000}.{extension}"
-                    : $"page_{pageIndex:000}.{extension}";
-
                 using (bitmap)
-                using (var fs = File.Create(Path.Combine(outputFolder, fileName)))
                 {
-                    bitmap.Encode(fs, imageFormat, 100);
+                    OperationContext.ThrowIfCancellationRequested();
+                    OperationContext.Report(new("Rendering page", input.FilePath, inputIndex, inputs.Count, pageIndex, null));
+                    using var transaction = OutputFileTransaction.Create(Path.Combine(outputFolder, PageOutputName(inputs, inputIndex, pageIndex, extension)));
+                    using (var stream = File.Create(transaction.CandidatePath))
+                    {
+                        if (!bitmap.Encode(stream, format, 100)) throw new InvalidDataException("Could not encode the rendered page.");
+                    }
+                    var path = transaction.Commit(candidate =>
+                    {
+                        using var decoded = SKBitmap.Decode(candidate);
+                        return decoded is not null && decoded.Width > 0 && decoded.Height > 0;
+                    });
+                    outputs.Add(new(path));
+                    pageIndex++;
                 }
-
-                pageIndex++;
-                exportedPages++;
             }
-        }
-
-        return exportedPages == 0
-            ? new OperationResult(false, string.Empty, "No pages were exported from the PDF.")
-            : new OperationResult(true, outputFolder, string.Empty);
+        });
     }
 }

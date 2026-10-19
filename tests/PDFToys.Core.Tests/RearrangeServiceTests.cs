@@ -7,6 +7,44 @@ namespace PDFToys.Core.Tests;
 
 public sealed class RearrangeServiceTests : PdfTestBase
 {
+    [Theory]
+    [InlineData(90, 0, 90)]
+    [InlineData(180, 90, 270)]
+    [InlineData(270, 90, 0)]
+    [InlineData(90, -90, 0)]
+    public void Rearrange_ComposesSourceRotationAndDelta(int source, int delta, int expected)
+    {
+        var path = Path.Combine(TempDirectory, "rotated.pdf");
+        using (var document = new PdfDocument())
+        {
+            document.AddPage().Elements.SetInteger("/Rotate", source);
+            document.Save(path);
+        }
+        var result = new RearrangeService().Rearrange(new PdfFile(path),
+            [new PageArrangementItem(0, delta), new PageArrangementItem(0)], new RearrangeOptions(TempDirectory));
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        using var output = PdfReader.Open(result.OutputPath, PdfDocumentOpenMode.Import);
+        Assert.Equal(expected, output.Pages[0].Elements.GetInteger("/Rotate"));
+        Assert.Equal(source, output.Pages[1].Elements.GetInteger("/Rotate"));
+    }
+
+    [Fact]
+    public void Rearrange_PreservesInheritedRotation()
+    {
+        var path = Path.Combine(TempDirectory, "inherited.pdf");
+        using (var document = new PdfDocument())
+        {
+            var page = document.AddPage();
+            page.Elements.Remove("/Rotate");
+            document.Pages.Elements.SetInteger("/Rotate", 180);
+            document.Save(path);
+        }
+        var result = new RearrangeService().Rearrange(new PdfFile(path), [new PageArrangementItem(0, 90)], new RearrangeOptions(TempDirectory));
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        using var output = PdfReader.Open(result.OutputPath, PdfDocumentOpenMode.Import);
+        Assert.Equal(270, output.Pages[0].Elements.GetInteger("/Rotate"));
+    }
+
     private readonly RearrangeService _service;
 
     public RearrangeServiceTests()

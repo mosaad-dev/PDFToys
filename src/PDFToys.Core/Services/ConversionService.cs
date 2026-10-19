@@ -22,8 +22,6 @@ public sealed class ConversionService : ServiceBase, IConversionService
             var validationError = ValidateForeignInput(inputFilePath, options.OutputDirectory);
             if (validationError != null) return validationError;
 
-            var outputFilePath = PrepareOutputEnvironment(inputFilePath, options.OutputDirectory, "Converted");
-
             var extension = Path.GetExtension(inputFilePath).ToLowerInvariant();
             var strategy = _strategies.FirstOrDefault(s => s.CanHandle(extension));
 
@@ -32,7 +30,13 @@ public sealed class ConversionService : ServiceBase, IConversionService
                 return new OperationResult(false, string.Empty, $"Unsupported file type: {extension}");
             }
 
-            return strategy.Execute(inputFilePath, options, outputFilePath);
+            OperationContext.ThrowIfCancellationRequested();
+            OperationContext.Report(new("Converting document", inputFilePath, 0, 1));
+            using var transaction = OutputFileTransaction.CreatePdf(inputFilePath, options.OutputDirectory, "Converted");
+            var result = strategy.Execute(inputFilePath, options, transaction.CandidatePath);
+            if (!result.IsSuccess) return result;
+            var outputPath = transaction.CommitPdf();
+            return new OperationResult(true, outputPath, "") { Warnings = result.Warnings };
         });
     }
 }
