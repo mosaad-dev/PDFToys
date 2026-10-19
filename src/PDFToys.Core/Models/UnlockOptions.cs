@@ -2,5 +2,6 @@
 
 public sealed record UnlockOptions(
     string Password,
-    string OutputDirectory
+    string OutputDirectory,
+    bool ReplaceOriginal = false
 );
