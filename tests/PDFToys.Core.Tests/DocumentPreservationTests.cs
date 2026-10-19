@@ -56,6 +56,23 @@ public sealed class DocumentPreservationTests : PdfTestBase
     }
 
     [Fact]
+    public void Split_EncryptedWithEmptyUserPassword_DoesNotSilentlyRemoveEncryption()
+    {
+        var path = Path.Combine(TempDirectory, "encrypted-owner.pdf");
+        using (var document = new PdfDocument())
+        {
+            document.AddPage(); document.SecuritySettings.OwnerPassword = "owner-secret";
+            document.Save(path);
+        }
+        var bytes = File.ReadAllBytes(path);
+        var result = new SplitService().Split(new(path), new(TempDirectory, 1));
+        Assert.False(result.IsSuccess);
+        Assert.Contains("encryption", result.ErrorMessage);
+        Assert.Equal(bytes, File.ReadAllBytes(path));
+        Assert.Empty(result.Outputs);
+    }
+
+    [Fact]
     public void ProtectThenUnlock_PreservesBookmarksAndMetadata()
     {
         var input = CreateBookmarkedPdf();

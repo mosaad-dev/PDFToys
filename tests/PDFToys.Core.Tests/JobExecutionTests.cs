@@ -152,6 +152,19 @@ public sealed class JobExecutionTests : PdfTestBase
     }
 
     [Fact]
+    public void Split_LargeChunkSize_DoesNotOverflow_AndInvalidPresetFails()
+    {
+        var input = CreatePdf("large-chunk.pdf", 2);
+        var service = new SplitService();
+        var result = service.Split(new(input), new(TempDirectory, int.MaxValue));
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        Assert.Single(result.Outputs);
+        using var output = PdfReader.Open(result.Outputs[0].Path, PdfDocumentOpenMode.Import);
+        Assert.Equal(2, output.PageCount);
+        Assert.False(service.Split(new(input), new(TempDirectory, 1, Preset: (SplitPreset)999)).IsSuccess);
+    }
+
+    [Fact]
     public void Export_IdenticalBasenames_ExportsEveryPageToDistinctFiles()
     {
         var first = Path.Combine(TempDirectory, "a"); var second = Path.Combine(TempDirectory, "b");

@@ -19,6 +19,7 @@ public sealed class SplitService : ServiceBase, ISplitService
         var result = ExecuteSafe(() =>
         {
             if (options is null) return new(false, "", "Options are required.");
+            if (!Enum.IsDefined(options.Preset)) return new(false, "", "Unsupported split preset.");
             var validation = ValidateStandardInputs(input, options.OutputDirectory);
             if (validation is not null) return validation;
             OperationContext.ThrowIfCancellationRequested();
@@ -32,7 +33,7 @@ public sealed class SplitService : ServiceBase, ISplitService
             else
             {
                 if (options.SplitEveryPages <= 0) return new(false, "", "SplitEveryPages must be greater than 0.");
-                ranges = Enumerable.Range(0, (document.PageCount + options.SplitEveryPages - 1) / options.SplitEveryPages)
+                ranges = Enumerable.Range(0, (int)(((long)document.PageCount + options.SplitEveryPages - 1) / options.SplitEveryPages))
                     .Select(index => new SplitRange(index * options.SplitEveryPages + 1, Math.Min(document.PageCount, (index + 1) * options.SplitEveryPages))).ToArray();
             }
             var rangeValidation = ValidateRanges(ranges, document.PageCount);

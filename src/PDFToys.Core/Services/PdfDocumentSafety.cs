@@ -43,7 +43,7 @@ public static class PdfDocumentSafety
     {
         var signed = CheckRewrite(document);
         if (signed is not null) return signed;
-        if (document.SecuritySettings.IsEncrypted) return Unsupported("encryption; unlock this PDF first");
+        if (IsEncryptedInput(document)) return Unsupported("encryption; unlock this PDF first");
         var catalog = document.Internals.Catalog;
         var features = new (string Key, string Name)[]
         {
@@ -55,6 +55,10 @@ public static class PdfDocumentSafety
         var present = features.Where(feature => catalog.Elements.ContainsKey(feature.Key)).Select(feature => feature.Name).ToArray();
         return present.Length == 0 ? null : Unsupported(string.Join(", ", present));
     }
+
+    public static bool IsEncryptedInput(PdfDocument document) => document.SecuritySettings.IsEncrypted ||
+        document.Internals.GetAllObjects().OfType<PdfDictionary>().Any(item =>
+            item.Elements["/Filter"] is PdfName { Value: "/Standard" } && item.Elements.ContainsKey("/O") && item.Elements.ContainsKey("/U"));
 
     public static void CopyDocumentProperties(PdfDocument source, PdfDocument destination)
     {
