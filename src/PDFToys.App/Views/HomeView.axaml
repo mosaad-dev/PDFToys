@@ -1,22 +1,75 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:PDFToys.App.ViewModels" x:Class="PDFToys.App.Views.HomeView" x:DataType="vm:HomeViewModel">
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PDFToys.App.ViewModels"
+             x:Class="PDFToys.App.Views.HomeView"
+             x:DataType="vm:HomeViewModel">
     <UserControl.Styles>
-        <Style Selector="Button.toolCard"><Setter Property="Width" Value="296" /><Setter Property="MinHeight" Value="100" /><Setter Property="Margin" Value="0,0,12,12" /><Setter Property="Padding" Value="18" /><Setter Property="HorizontalContentAlignment" Value="Left" /><Setter Property="VerticalContentAlignment" Value="Center" /></Style>
+        <Style Selector="Button.toolCard">
+            <Setter Property="Width" Value="296" />
+            <Setter Property="MinHeight" Value="100" />
+            <Setter Property="Margin" Value="0,0,12,12" />
+            <Setter Property="Padding" Value="18" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
     </UserControl.Styles>
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="24" Spacing="12" MaxWidth="920">
             <TextBlock Text="PDFToys" FontSize="32" FontWeight="Bold" />
             <TextBlock Text="Everyday PDF tools, right on your desktop." Classes="helper" Margin="0,0,0,12" />
+            <TextBlock Text="Document tools" Classes="sectionTitle" />
             <WrapPanel HorizontalAlignment="Left">
-                <Button Classes="toolCard" AutomationProperties.Name="Merge PDFs" Command="{Binding GoToMergeCommand}"><StackPanel Spacing="7"><TextBlock Text="Merge PDFs" FontWeight="SemiBold" FontSize="17" /><TextBlock Text="Bring documents together in order." Classes="helper" /></StackPanel></Button>
-                <Button Classes="toolCard" AutomationProperties.Name="Split PDF" Command="{Binding GoToSplitCommand}"><StackPanel Spacing="7"><TextBlock Text="Split PDF" FontWeight="SemiBold" FontSize="17" /><TextBlock Text="Separate pages into new files." Classes="helper" /></StackPanel></Button>
-                <Button Classes="toolCard" AutomationProperties.Name="Compress PDF" Command="{Binding GoToCompressCommand}"><StackPanel Spacing="7"><TextBlock Text="Compress PDF" FontWeight="SemiBold" FontSize="17" /><TextBlock Text="Reduce image size with clear results." Classes="helper" /></StackPanel></Button>
-                <Button Classes="toolCard" AutomationProperties.Name="Organize pages" Command="{Binding GoToOrganizePagesCommand}"><StackPanel Spacing="7"><TextBlock Text="Organize pages" FontWeight="SemiBold" FontSize="17" /><TextBlock Text="Reorder, rotate and remove pages." Classes="helper" /></StackPanel></Button>
-                <Button Classes="toolCard" AutomationProperties.Name="Protect PDF" Command="{Binding GoToProtectCommand}"><StackPanel Spacing="7"><TextBlock Text="Protect PDF" FontWeight="SemiBold" FontSize="17" /><TextBlock Text="Require a password to open a PDF." Classes="helper" /></StackPanel></Button>
-                <Button Classes="toolCard" AutomationProperties.Name="Unlock PDF" Command="{Binding GoToUnlockCommand}"><StackPanel Spacing="7"><TextBlock Text="Unlock PDF" FontWeight="SemiBold" FontSize="17" /><TextBlock Text="Remove a password you know." Classes="helper" /></StackPanel></Button>
-                <Button Classes="toolCard" AutomationProperties.Name="Convert / export" Command="{Binding GoToConvertExportCommand}"><StackPanel Spacing="7"><TextBlock Text="Convert / export" FontWeight="SemiBold" FontSize="17" /><TextBlock Text="Create PDFs, images and text exports." Classes="helper" /></StackPanel></Button>
-                <Button Classes="toolCard" AutomationProperties.Name="About PDFToys" Command="{Binding GoToAboutCommand}"><StackPanel Spacing="7"><TextBlock Text="About PDFToys" FontWeight="SemiBold" FontSize="17" /><TextBlock Text="Version, licenses and project information." Classes="helper" /></StackPanel></Button>
+                <Button Classes="toolCard" AutomationProperties.Name="Merge PDFs" Command="{Binding GoToMergeCommand}">
+                    <StackPanel Spacing="7">
+                        <TextBlock Text="Merge PDFs" FontWeight="SemiBold" FontSize="17" />
+                        <TextBlock Text="Bring documents together in order." Classes="helper" />
+                    </StackPanel>
+                </Button>
+                <Button Classes="toolCard" AutomationProperties.Name="Split PDF" Command="{Binding GoToSplitCommand}">
+                    <StackPanel Spacing="7">
+                        <TextBlock Text="Split PDF" FontWeight="SemiBold" FontSize="17" />
+                        <TextBlock Text="Separate pages into new files." Classes="helper" />
+                    </StackPanel>
+                </Button>
+                <Button Classes="toolCard" AutomationProperties.Name="Compress PDF" Command="{Binding GoToCompressCommand}">
+                    <StackPanel Spacing="7">
+                        <TextBlock Text="Compress PDF" FontWeight="SemiBold" FontSize="17" />
+                        <TextBlock Text="Reduce image size with clear results." Classes="helper" />
+                    </StackPanel>
+                </Button>
+                <Button Classes="toolCard" AutomationProperties.Name="Organize pages" Command="{Binding GoToOrganizePagesCommand}">
+                    <StackPanel Spacing="7">
+                        <TextBlock Text="Organize pages" FontWeight="SemiBold" FontSize="17" />
+                        <TextBlock Text="Reorder, rotate and remove pages." Classes="helper" />
+                    </StackPanel>
+                </Button>
+                <Button Classes="toolCard" AutomationProperties.Name="Protect PDF" Command="{Binding GoToProtectCommand}">
+                    <StackPanel Spacing="7">
+                        <TextBlock Text="Protect PDF" FontWeight="SemiBold" FontSize="17" />
+                        <TextBlock Text="Require a password to open a PDF." Classes="helper" />
+                    </StackPanel>
+                </Button>
+                <Button Classes="toolCard" AutomationProperties.Name="Unlock PDF" Command="{Binding GoToUnlockCommand}">
+                    <StackPanel Spacing="7">
+                        <TextBlock Text="Unlock PDF" FontWeight="SemiBold" FontSize="17" />
+                        <TextBlock Text="Remove a password you know." Classes="helper" />
+                    </StackPanel>
+                </Button>
             </WrapPanel>
+            <TextBlock Text="Convert &amp; export" Classes="sectionTitle" Margin="0,4,0,0" />
+            <WrapPanel HorizontalAlignment="Left">
+                <Button Classes="toolCard" AutomationProperties.Name="Convert / export" Command="{Binding GoToConvertExportCommand}">
+                    <StackPanel Spacing="7">
+                        <TextBlock Text="Convert / export" FontWeight="SemiBold" FontSize="17" />
+                        <TextBlock Text="Create PDFs, images and text exports." Classes="helper" />
+                    </StackPanel>
+                </Button>
+            </WrapPanel>
+            <Border BorderBrush="{DynamicResource ToolBorderBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+                <Button Content="About PDFToys" AutomationProperties.Name="About PDFToys"
+                        Command="{Binding GoToAboutCommand}" Background="Transparent"
+                        HorizontalAlignment="Left" ToolTip.Tip="Version, licenses and project information" />
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>
