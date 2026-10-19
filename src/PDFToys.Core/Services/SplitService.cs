@@ -15,79 +15,55 @@ public sealed class SplitService : ServiceBase, ISplitService
     /// <returns>An OperationResult indicating success or failure, containing the output directory path if successful.</returns>
     public OperationResult Split(PdfFile input, SplitOptions options)
     {
-        return ExecuteSafe(() =>
+        var outputs = new List<OperationOutput>();
+        var result = ExecuteSafe(() =>
         {
-            // Validation
-            var validationError = ValidateStandardInputs(input, options.OutputDirectory);
-            if (validationError != null)
+            if (options is null) return new(false, "", "Options are required.");
+            var validation = ValidateStandardInputs(input, options.OutputDirectory);
+            if (validation is not null) return validation;
+            OperationContext.ThrowIfCancellationRequested();
+            using var document = PdfReader.Open(input.FilePath, PdfDocumentOpenMode.Import);
+            var compatibility = PdfDocumentSafety.CheckPageCopy(document);
+            if (compatibility is not null) return compatibility;
+            IReadOnlyList<SplitRange> ranges;
+            var namedRanges = options.CustomRanges is { Count: > 0 } || options.Preset != SplitPreset.None;
+            if (options.CustomRanges is { Count: > 0 }) ranges = options.CustomRanges.ToArray();
+            else if (options.Preset != SplitPreset.None) ranges = BuildPresetRanges(document.PageCount, options.Preset);
+            else
             {
-                return validationError;
+                if (options.SplitEveryPages <= 0) return new(false, "", "SplitEveryPages must be greater than 0.");
+                ranges = Enumerable.Range(0, (document.PageCount + options.SplitEveryPages - 1) / options.SplitEveryPages)
+                    .Select(index => new SplitRange(index * options.SplitEveryPages + 1, Math.Min(document.PageCount, (index + 1) * options.SplitEveryPages))).ToArray();
             }
-
-            Directory.CreateDirectory(options.OutputDirectory);
-
-            using var inputDocument = PdfReader.Open(input.FilePath, PdfDocumentOpenMode.Import);
-            var originalFileName = Path.GetFileNameWithoutExtension(input.FilePath);
-
-            if (options.CustomRanges is { Count: > 0 })
+            var rangeValidation = ValidateRanges(ranges, document.PageCount);
+            if (!rangeValidation.IsSuccess) return rangeValidation;
+            var sourceName = Path.GetFileNameWithoutExtension(input.FilePath);
+            for (var part = 0; part < ranges.Count; part++)
             {
-                var rangeValidation = ValidateRanges(options.CustomRanges, inputDocument.PageCount);
-                if (!rangeValidation.IsSuccess)
+                OperationContext.ThrowIfCancellationRequested();
+                var range = ranges[part];
+                using var output = new PdfDocument();
+                for (var page = range.StartPage; page <= range.EndPage; page++)
                 {
-                    return rangeValidation;
+                    OperationContext.ThrowIfCancellationRequested();
+                    OperationContext.Report(new("Splitting pages", input.FilePath, part, ranges.Count, page, document.PageCount));
+                    output.AddPage(document.Pages[page - 1]);
                 }
-
-                SaveCustomRanges(inputDocument, options, originalFileName, options.CustomRanges);
-                return new OperationResult(true, Path.GetFullPath(options.OutputDirectory), string.Empty);
+                var name = namedRanges ? $"{sourceName}_Part{part + 1}_p{range.StartPage}-{range.EndPage}.pdf" : $"{sourceName}_Part{part + 1}.pdf";
+                using var transaction = OutputFileTransaction.Create(Path.Combine(options.OutputDirectory, name), input.FilePath);
+                output.Save(transaction.CandidatePath);
+                outputs.Add(new(transaction.CommitPdf()));
             }
-
-            if (options.Preset is not SplitPreset.None)
-            {
-                var presetRanges = BuildPresetRanges(inputDocument.PageCount, options.Preset);
-                SaveCustomRanges(inputDocument, options, originalFileName, presetRanges);
-                return new OperationResult(true, Path.GetFullPath(options.OutputDirectory), string.Empty);
-            }
-
-            if (options.SplitEveryPages <= 0)
-            {
-                return new OperationResult(false, string.Empty, "SplitEveryPages must be greater than 0.");
-            }
-
-            var partNumber = 1;
-            var pagesInCurrentPart = 0;
-            PdfDocument? outputDocument = null;
-
-            for (var pageIndex = 0; pageIndex < inputDocument.PageCount; pageIndex++)
-            {
-                if (outputDocument is null || pagesInCurrentPart == options.SplitEveryPages)
-                {
-                    outputDocument?.Dispose();
-                    outputDocument = new PdfDocument();
-                    pagesInCurrentPart = 0;
-                }
-
-                outputDocument.AddPage(inputDocument.Pages[pageIndex]);
-                pagesInCurrentPart++;
-
-                var isChunkComplete = pagesInCurrentPart == options.SplitEveryPages;
-                var isLastPage = pageIndex == inputDocument.PageCount - 1;
-
-                if (!isChunkComplete && !isLastPage)
-                {
-                    continue;
-                }
-
-                var outputFileName = $"{originalFileName}_Part{partNumber}.pdf";
-                var outputPath = Path.Combine(options.OutputDirectory, outputFileName);
-                outputDocument.Save(outputPath);
-                partNumber++;
-            }
-
-            outputDocument?.Dispose();
-            return new OperationResult(true, Path.GetFullPath(options.OutputDirectory), string.Empty);
+            return new(true, Path.GetFullPath(options.OutputDirectory), "") { Outputs = outputs.ToArray() };
         });
+        return result.IsSuccess || outputs.Count == 0 ? result : result with
+        {
+            Outcome = result.Outcome == OperationOutcome.Cancelled ? OperationOutcome.Cancelled : OperationOutcome.PartialSuccess,
+            OutputPath = Path.GetFullPath(options.OutputDirectory),
+            Outputs = outputs.ToArray(),
+            Warnings = ["Previously completed parts were kept."]
+        };
     }
-
     private static OperationResult ValidateRanges(IReadOnlyList<SplitRange> ranges, int pageCount)
     {
         var ordered = ranges.OrderBy(range => range.StartPage).ToArray();
@@ -157,25 +133,5 @@ public sealed class SplitService : ServiceBase, ISplitService
         return ranges;
     }
 
-    private static void SaveCustomRanges(
-        PdfDocument inputDocument,
-        SplitOptions options,
-        string originalFileName,
-        IReadOnlyList<SplitRange> ranges)
-    {
-        var partNumber = 1;
-        foreach (var range in ranges)
-        {
-            using var outputDocument = new PdfDocument();
-            for (var page = range.StartPage; page <= range.EndPage; page++)
-            {
-                outputDocument.AddPage(inputDocument.Pages[page - 1]);
-            }
-
-            var outputFileName = $"{originalFileName}_Part{partNumber}_p{range.StartPage}-{range.EndPage}.pdf";
-            var outputPath = Path.Combine(options.OutputDirectory, outputFileName);
-            outputDocument.Save(outputPath);
-            partNumber++;
-        }
-    }
 }
+
