@@ -1,80 +1,41 @@
-<UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:PDFToys.App.ViewModels"
-             xmlns:models="using:PDFToys.App.Models"
-             x:Class="PDFToys.App.Views.ProtectView"
-             x:DataType="vm:ProtectViewModel">
-	<Grid Margin="24"
-          HorizontalAlignment="Stretch"
-          VerticalAlignment="Stretch"
-          RowDefinitions="Auto, Auto, *, Auto">
-		<StackPanel Grid.Row="0"
-                    Spacing="8">
-			<Button Content="← Back to Hub" Command="{Binding GoBackCommand}" Background="Transparent" Foreground="LightSkyBlue" Cursor="Hand" Margin="0,0,0,15" HorizontalAlignment="Left" />
-			<TextBlock Text="Protect PDF"
-                       FontSize="22"
-                       FontWeight="Bold"
-                       HorizontalAlignment="Center" />
-		</StackPanel>
-
-		<Button Grid.Row="1"
-                Content="+ Add PDFs to Protect"
-                Command="{Binding AddFilesCommand}"
-                Margin="0,10,0,10" />
-
-		<StackPanel Grid.Row="2" Spacing="6">
-			<TextBlock Text="SELECTED"
-                       FontWeight="SemiBold" />
-			<ListBox ItemsSource="{Binding SelectedFiles}"
-                     MaxHeight="200">
-				<ListBox.ItemTemplate>
-					<DataTemplate x:DataType="vm:PdfFileItem">
-						<Border Padding="4,2">
-							<Grid ColumnDefinitions="*,Auto"
-								  ColumnSpacing="8">
-								<TextBlock Grid.Column="0"
-										   Text="{Binding FileName}"
-										   TextWrapping="Wrap" />
-								<Button Grid.Column="1"
-										Content="X"
-										Command="{Binding $parent[UserControl].DataContext.RemoveFileCommand}"
-										CommandParameter="{Binding}" />
-							</Grid>
-						</Border>
-					</DataTemplate>
-				</ListBox.ItemTemplate>
-			</ListBox>
-		</StackPanel>
-
-		<StackPanel Grid.Row="3"
-                    Spacing="12">
-			<StackPanel Spacing="6">
-				<TextBlock Text="Output"
-                           FontWeight="SemiBold" />
-				<ComboBox ItemsSource="{Binding OutputMode.OutputModeItems}"
-                          SelectedItem="{Binding OutputMode.SelectedOutputModeItem}"
-                          HorizontalAlignment="Stretch">
-					<ComboBox.ItemTemplate>
-						<DataTemplate x:DataType="models:PdfOutputModeItem">
-							<TextBlock Text="{Binding Label}" />
-						</DataTemplate>
-					</ComboBox.ItemTemplate>
-				</ComboBox>
-				<TextBlock Text="{x:Static vm:PdfOutputModeSelection.ReplaceOriginalWarning}"
-                           TextWrapping="Wrap"
-                           Foreground="OrangeRed"
-                           FontSize="12"
-                           IsVisible="{Binding OutputMode.ShowReplaceOriginalWarning}" />
-			</StackPanel>
-			<TextBox Text="{Binding Password}"
-                     PasswordChar="*"
-                     Watermark="Enter secure password..." />
-			<Button Content="Apply Password"
-                    Command="{Binding ExecuteProtectCommand}"
-                    HorizontalAlignment="Left"
-                    Padding="12,8" />
-			<TextBlock Text="{Binding StatusMessage}"
-                       TextWrapping="Wrap" />
-		</StackPanel>
-	</Grid>
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PDFToys.App.ViewModels" xmlns:views="using:PDFToys.App.Views" xmlns:models="using:PDFToys.App.Models"
+             x:Class="PDFToys.App.Views.ProtectView" x:DataType="vm:ProtectViewModel">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,16,24,24" Spacing="16" MaxWidth="880" HorizontalAlignment="Stretch">
+            <Button Content="← Home" Command="{Binding GoBackCommand}" Classes="back" />
+            <StackPanel Spacing="6">
+                <TextBlock Text="Protect PDF" Classes="toolTitle" />
+                <TextBlock Text="Add a password to control who can open a PDF. Store the password somewhere safe." Classes="helper" />
+            </StackPanel>
+            <StackPanel Spacing="8" IsEnabled="{Binding IsIdle}">
+                <TextBlock Text="Input files" Classes="sectionTitle" />
+                <Button Content="Add PDF files" Command="{Binding AddFilesCommand}" HorizontalAlignment="Left" />
+                <ListBox ItemsSource="{Binding SelectedFiles}" AutomationProperties.Name="Selected files">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PdfFileItem">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="2,4">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="{Binding FileName}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding FullPath}" Classes="helper" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="Remove" Command="{Binding $parent[UserControl].DataContext.RemoveFileCommand}" CommandParameter="{Binding}" VerticalAlignment="Center" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+            <StackPanel Spacing="8" IsEnabled="{Binding IsIdle}">
+                <TextBlock Text="New password" Classes="sectionTitle" />
+                <TextBox Text="{Binding Password}" PasswordChar="●" PlaceholderText="Enter a new password" AutomationProperties.Name="PDF password" />
+                <TextBlock Text="Output" Classes="sectionTitle" Margin="0,8,0,0" />
+                <ComboBox ItemsSource="{Binding OutputMode.OutputModeItems}" SelectedItem="{Binding OutputMode.SelectedOutputModeItem}" AutomationProperties.Name="Output mode">
+                    <ComboBox.ItemTemplate><DataTemplate x:DataType="models:PdfOutputModeItem"><TextBlock Text="{Binding Label}" TextWrapping="Wrap" /></DataTemplate></ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Text="{x:Static vm:PdfOutputModeSelection.ReplaceOriginalWarning}" Classes="helper" IsVisible="{Binding OutputMode.ShowReplaceOriginalWarning}" />
+            </StackPanel>
+            <Button Content="Protect files" Command="{Binding ExecuteProtectCommand}" Classes="primary" HorizontalAlignment="Left" />
+            <views:OperationResultsView />
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>

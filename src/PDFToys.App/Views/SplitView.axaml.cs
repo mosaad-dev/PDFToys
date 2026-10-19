@@ -1,11 +1,16 @@
+using Avalonia;
 using Avalonia.Controls;
+using PDFToys.App.ViewModels;
 
 namespace PDFToys.App.Views;
 
 public partial class SplitView : UserControl
 {
-    public SplitView()
+    public SplitView() { InitializeComponent(); }
+    protected override async void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
-        InitializeComponent();
+        base.OnAttachedToVisualTree(e);
+        if (DataContext is SplitViewModel vm && !string.IsNullOrWhiteSpace(vm.SelectedFilePath) && !vm.IsBusy)
+            await vm.LoadInputAsync(vm.SelectedFilePath);
     }
 }

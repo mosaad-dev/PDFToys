@@ -2,38 +2,39 @@ using PDFToys.App.Services;
 using PDFToys.App.ViewModels;
 using PDFToys.Core.Contracts;
 using PDFToys.Core.Models;
+using PDFToys.Core.Services;
 
 namespace PDFToys.App.Tests;
 
 public sealed class ProtectViewModelTests
 {
     [Fact]
-    public void ExecuteProtect_WithoutFiles_ShowsValidationMessage()
+    public async Task ExecuteProtect_WithoutFiles_ShowsValidationMessage()
     {
         var service = new ProtectServiceStub();
         var viewModel = CreateViewModel(service);
 
         viewModel.Password = "secret";
-        viewModel.ExecuteProtectCommand.Execute(null);
+        await viewModel.ExecuteProtectCommand.ExecuteAsync(null);
 
         Assert.Equal("Please select PDF files first.", viewModel.StatusMessage);
         Assert.Equal(0, service.ProtectCallCount);
     }
 
     [Fact]
-    public void ExecuteProtect_WithoutPassword_ShowsValidationMessage()
+    public async Task ExecuteProtect_WithoutPassword_ShowsValidationMessage()
     {
         var service = new ProtectServiceStub();
         var viewModel = CreateViewModel(service, ["document.pdf"]);
 
-        viewModel.ExecuteProtectCommand.Execute(null);
+        await viewModel.ExecuteProtectCommand.ExecuteAsync(null);
 
         Assert.Equal("Password is required.", viewModel.StatusMessage);
         Assert.Equal(0, service.ProtectCallCount);
     }
 
     [Fact]
-    public void ExecuteProtect_WithValidInput_CreatesProtectedCopy()
+    public async Task ExecuteProtect_WithValidInput_CreatesProtectedCopy()
     {
         var inputPath = Path.Combine(
             Path.GetTempPath(),
@@ -46,13 +47,13 @@ public sealed class ProtectViewModelTests
             var viewModel = CreateViewModel(service, [inputPath]);
             viewModel.Password = "secret";
 
-            viewModel.ExecuteProtectCommand.Execute(null);
+            await viewModel.ExecuteProtectCommand.ExecuteAsync(null);
 
             Assert.Equal(1, service.ProtectCallCount);
             Assert.Equal(inputPath, service.LastInput?.FilePath);
             Assert.Equal("secret", service.LastOptions?.Password);
             Assert.Equal(Path.GetDirectoryName(inputPath), service.LastOptions?.OutputDirectory);
-            Assert.Equal("Protected 1/1 files successfully!", viewModel.StatusMessage);
+            Assert.Equal("Protect: 1/1 files completed.", viewModel.StatusMessage);
         }
         finally
         {
@@ -68,7 +69,8 @@ public sealed class ProtectViewModelTests
             service,
             new FileDialogStub(),
             () => { },
-            initialFiles);
+            initialFiles,
+            runner: new ApplicationJobRunner());
     }
 
     private sealed class ProtectServiceStub : IProtectService

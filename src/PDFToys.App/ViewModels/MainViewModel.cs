@@ -73,6 +73,11 @@ public sealed class MainViewModel : ViewModelBase
 
     public void NavigateTo(ViewModelBase page)
     {
+        if (CurrentPage is OperationViewModelBase { IsBusy: true } operation)
+        {
+            operation.StatusMessage = "Wait for the operation to finish, or choose Cancel before returning home.";
+            return;
+        }
         CurrentPage = page;
     }
 
@@ -262,7 +267,9 @@ public sealed class MainViewModel : ViewModelBase
     private SplitViewModel CreateSplitViewModel()
     {
         var splitService = _serviceProvider.GetRequiredService<ISplitService>();
-        return new SplitViewModel(splitService, GoHome);
+        return new SplitViewModel(splitService, GoHome,
+            _serviceProvider.GetRequiredService<IFileDialogService>(),
+            _serviceProvider.GetRequiredService<IRearrangeService>());
     }
 
     private ProtectViewModel CreateProtectViewModel(IEnumerable<string>? initialFiles = null)

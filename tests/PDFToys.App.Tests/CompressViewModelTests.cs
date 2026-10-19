@@ -3,6 +3,7 @@ using PDFToys.App.Services;
 using PDFToys.App.ViewModels;
 using PDFToys.Core.Contracts;
 using PDFToys.Core.Models;
+using PDFToys.Core.Services;
 
 namespace PDFToys.App.Tests;
 
@@ -18,12 +19,12 @@ public sealed class CompressViewModelTests : IDisposable
     }
 
     [Fact]
-    public void ExecuteCompress_WithoutFiles_ShowsValidationMessage()
+    public async Task ExecuteCompress_WithoutFiles_ShowsValidationMessage()
     {
         var service = new CompressionServiceStub(CreateSuccessfulResult);
         var viewModel = CreateViewModel(service);
 
-        viewModel.ExecuteCompressCommand.Execute(null);
+        await viewModel.ExecuteCompressCommand.ExecuteAsync(null);
 
         Assert.Equal("Please select PDF files first.", viewModel.StatusMessage);
         Assert.Empty(service.Calls);
@@ -45,7 +46,7 @@ public sealed class CompressViewModelTests : IDisposable
     [Theory]
     [InlineData(CompressionLevel.Normal)]
     [InlineData(CompressionLevel.Maximum)]
-    public void ExecuteCompress_UsesSelectedCompressionLevel(
+    public async Task ExecuteCompress_UsesSelectedCompressionLevel(
         CompressionLevel level)
     {
         var inputPath = CreateInput($"{level}.pdf");
@@ -55,17 +56,17 @@ public sealed class CompressViewModelTests : IDisposable
             ? "Maximum"
             : "Standard";
 
-        viewModel.ExecuteCompressCommand.Execute(null);
+        await viewModel.ExecuteCompressCommand.ExecuteAsync(null);
 
         var call = Assert.Single(service.Calls);
         Assert.Equal(level, call.Options.Level);
         Assert.Equal(Path.GetDirectoryName(inputPath), call.Options.OutputDirectory);
-        Assert.Equal("Compressed 1/1 files successfully!", viewModel.StatusMessage);
+        Assert.Equal("Compression: 1/1 files completed.", viewModel.StatusMessage);
         Assert.False(viewModel.IsBusy);
     }
 
     [Fact]
-    public void ExecuteCompress_WithPartialFailure_ReportsFailedFile()
+    public async Task ExecuteCompress_WithPartialFailure_ReportsFailedFile()
     {
         var successfulInput = CreateInput("successful.pdf");
         var failedInput = CreateInput("failed.pdf");
@@ -75,12 +76,13 @@ public sealed class CompressViewModelTests : IDisposable
                 : CreateSuccessfulResult(input, options));
         var viewModel = CreateViewModel(service, [successfulInput, failedInput]);
 
-        viewModel.ExecuteCompressCommand.Execute(null);
+        await viewModel.ExecuteCompressCommand.ExecuteAsync(null);
 
         Assert.Equal(2, service.Calls.Count);
-        Assert.Contains("Compressed 1/2 files successfully", viewModel.StatusMessage);
-        Assert.Contains(failedInput, viewModel.StatusMessage);
-        Assert.Contains("Test failure.", viewModel.StatusMessage);
+        Assert.Contains("1 file(s) need attention", viewModel.StatusMessage);
+        var failure = Assert.Single(viewModel.Results, r => !r.Result.IsSuccess);
+        Assert.Equal(failedInput, failure.InputPath);
+        Assert.Contains("Test failure.", failure.Details);
     }
 
     [Fact]
@@ -97,7 +99,7 @@ public sealed class CompressViewModelTests : IDisposable
         });
         var viewModel = CreateViewModel(service, [inputPath]);
 
-        var execution = Task.Run(() => viewModel.ExecuteCompressCommand.Execute(null));
+        var execution = viewModel.ExecuteCompressCommand.ExecuteAsync(null);
         Assert.True(started.Wait(TimeSpan.FromSeconds(5)));
 
         try
@@ -131,7 +133,7 @@ public sealed class CompressViewModelTests : IDisposable
     }
 
     [Fact]
-    public void ExecuteCompress_AfterSuccess_SavesSelectedCompressionLevel()
+    public async Task ExecuteCompress_AfterSuccess_SavesSelectedCompressionLevel()
     {
         var inputPath = CreateInput("settings.pdf");
         var service = new CompressionServiceStub(CreateSuccessfulResult);
@@ -139,7 +141,7 @@ public sealed class CompressViewModelTests : IDisposable
         var viewModel = CreateViewModel(service, [inputPath], settingsStore);
         viewModel.SelectedCompressionLevel = "Maximum";
 
-        viewModel.ExecuteCompressCommand.Execute(null);
+        await viewModel.ExecuteCompressCommand.ExecuteAsync(null);
 
         Assert.Equal(1, settingsStore.SaveCallCount);
         Assert.Equal("Maximum", settingsStore.SavedSettings?.DefaultCompressionLevel);
@@ -163,7 +165,8 @@ public sealed class CompressViewModelTests : IDisposable
             new FileDialogStub(),
             () => { },
             initialFiles,
-            settingsStore);
+            settingsStore,
+            runner: new ApplicationJobRunner());
     }
 
     private string CreateInput(string fileName)

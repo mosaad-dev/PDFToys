@@ -1,67 +1,33 @@
-<UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:vm="using:PDFToys.App.ViewModels"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d"
-             x:Class="PDFToys.App.Views.MergeView"
-             x:DataType="vm:MergeViewModel">
-	<Border Padding="24">
-		<StackPanel HorizontalAlignment="Stretch"
-                    VerticalAlignment="Center"
-                    Spacing="20">
-			<Button Content="← Back to Hub" Command="{Binding GoBackCommand}" Background="Transparent" Foreground="LightSkyBlue" Cursor="Hand" Margin="0,0,0,15" HorizontalAlignment="Left" />
-			<TextBlock Text="{Binding StatusMessage}"
-                       FontWeight="Bold"
-                       TextAlignment="Center"
-                       HorizontalAlignment="Stretch" />
-
-			<Button Content="1. Select PDFs to Merge"
-                    Command="{Binding AddFilesCommand}"
-                    HorizontalAlignment="Stretch"
-                    Padding="12,8" />
-
-			<StackPanel Spacing="6">
-				<TextBlock Text="SELECTED"
-                           FontWeight="SemiBold" />
-				<Grid ColumnDefinitions="*,Auto"
-					  ColumnSpacing="12">
-					<ListBox Grid.Column="0"
-							 x:Name="MergeItemsListBox"
-							 ItemsSource="{Binding MergeItems}"
-							 DragDrop.AllowDrop="True"
-							 MinWidth="220"
-							 MaxHeight="220">
-						<ListBox.ItemTemplate>
-							<DataTemplate>
-								<Grid ColumnDefinitions="Auto,*,Auto"
-									  Background="Transparent"
-									  Margin="4,2"
-									  Cursor="Hand">
-									<TextBlock Grid.Column="0"
-											   Text="≡"
-											   FontSize="20"
-											   FontWeight="Bold"
-											   Foreground="Gray"
-											   Margin="0,0,10,0"
-											   Cursor="SizeAll"
-											   ToolTip.Tip="Drag to reorder"
-											   VerticalAlignment="Center" />
-									<TextBlock Grid.Column="1"
-											   Text="{Binding FileName}"
-											   TextWrapping="Wrap"
-											   VerticalAlignment="Center" />
-								</Grid>
-							</DataTemplate>
-						</ListBox.ItemTemplate>
-					</ListBox>
-				</Grid>
-			</StackPanel>
-
-			<Button Content="2. Execute Merge"
-                    Command="{Binding ExecuteMergeCommand}"
-                    HorizontalAlignment="Stretch"
-                    Padding="12,8" />
-		</StackPanel>
-	</Border>
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PDFToys.App.ViewModels" xmlns:views="using:PDFToys.App.Views" xmlns:models="using:PDFToys.App.Models"
+             x:Class="PDFToys.App.Views.MergeView" x:DataType="vm:MergeViewModel">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,16,24,24" Spacing="16" MaxWidth="880" HorizontalAlignment="Stretch">
+            <Button Content="← Home" Command="{Binding GoBackCommand}" Classes="back" />
+            <StackPanel Spacing="6">
+                <TextBlock Text="Merge PDFs" Classes="toolTitle" />
+                <TextBlock Text="Combine PDFs in the order below. Select a file and use Move up / down, or drag it to another position." Classes="helper" />
+            </StackPanel>
+            <StackPanel Spacing="8" IsEnabled="{Binding IsIdle}">
+                <TextBlock Text="Input files, in order" Classes="sectionTitle" />
+                <Button Content="Add PDF files" Command="{Binding AddFilesCommand}" HorizontalAlignment="Left" />
+                <ListBox x:Name="MergeItemsListBox" ItemsSource="{Binding MergeItems}" SelectedItem="{Binding SelectedItem}" DragDrop.AllowDrop="True" AutomationProperties.Name="PDF merge order">
+                    <ListBox.ItemTemplate><DataTemplate x:DataType="vm:MergeItem">
+                        <StackPanel Spacing="3" Margin="2,4">
+                            <TextBlock Text="{Binding FileName}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding FullPath}" Classes="helper" />
+                        </StackPanel>
+                    </DataTemplate></ListBox.ItemTemplate>
+                </ListBox>
+                <WrapPanel>
+                    <Button Content="Move up" Command="{Binding MoveUpCommand}" Margin="0,0,8,8" />
+                    <Button Content="Move down" Command="{Binding MoveDownCommand}" Margin="0,0,8,8" />
+                    <Button Content="Remove selected" Command="{Binding RemoveFileCommand}" Margin="0,0,0,8" />
+                </WrapPanel>
+            </StackPanel>
+            <TextBlock Text="Output: a new merged PDF beside the inputs. Files from different folders prompt for a save location." Classes="helper" />
+            <Button Content="Merge files" Command="{Binding ExecuteMergeCommand}" Classes="primary" HorizontalAlignment="Left" />
+            <views:OperationResultsView />
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>

@@ -6,8 +6,33 @@
              RequestedThemeVariant="Default">
 	<!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
-	<Application.Styles>
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="ToolMutedBrush" Color="#566579" />
+                    <SolidColorBrush x:Key="ToolCardBrush" Color="#F3F6FA" />
+                    <SolidColorBrush x:Key="ToolBorderBrush" Color="#D7DFE8" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="ToolMutedBrush" Color="#B0BECE" />
+                    <SolidColorBrush x:Key="ToolCardBrush" Color="#252D38" />
+                    <SolidColorBrush x:Key="ToolBorderBrush" Color="#424E5C" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+    <Application.Styles>
 		<FluentTheme />
+        <Style Selector="TextBlock.toolTitle"><Setter Property="FontSize" Value="26" /><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="TextWrapping" Value="Wrap" /></Style>
+        <Style Selector="TextBlock.sectionTitle"><Setter Property="FontSize" Value="14" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+        <Style Selector="TextBlock.helper"><Setter Property="FontSize" Value="12" /><Setter Property="Foreground" Value="{DynamicResource ToolMutedBrush}" /><Setter Property="TextWrapping" Value="Wrap" /></Style>
+        <Style Selector="Button"><Setter Property="MinHeight" Value="36" /></Style>
+        <Style Selector="Button.primary"><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="Padding" Value="18,10" /></Style>
+        <Style Selector="Button.back"><Setter Property="Background" Value="Transparent" /><Setter Property="HorizontalAlignment" Value="Left" /><Setter Property="Padding" Value="0,6" /></Style>
+        <Style Selector="Border.statusCard, Border.resultCard"><Setter Property="Background" Value="{DynamicResource ToolCardBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource ToolBorderBrush}" /><Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="8" /></Style>
+        <Style Selector="ListBox"><Setter Property="MinHeight" Value="84" /><Setter Property="MaxHeight" Value="240" /></Style>
+        <Style Selector="ComboBox"><Setter Property="HorizontalAlignment" Value="Stretch" /></Style>
 	</Application.Styles>
 
 	<Application.DataTemplates>

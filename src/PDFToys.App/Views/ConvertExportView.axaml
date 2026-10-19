@@ -1,80 +1,39 @@
-<UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:PDFToys.App.ViewModels"
-             xmlns:models="using:PDFToys.App.Models"
-             x:Class="PDFToys.App.Views.ConvertExportView"
-             x:DataType="vm:ConvertExportViewModel">
-	<Grid Margin="24"
-          RowDefinitions="Auto,Auto,Auto,*,Auto"
-          RowSpacing="12">
-		<StackPanel Grid.Row="0" Spacing="8">
-			<Button Content="← Back to Hub"
-                    Command="{Binding GoBackCommand}"
-                    Background="Transparent"
-                    Foreground="LightSkyBlue"
-                    HorizontalAlignment="Left" />
-			<TextBlock Text="Convert / Export"
-                       FontSize="22"
-                       FontWeight="Bold"
-                       HorizontalAlignment="Center" />
-			<TextBlock Text="Office formats require installed Word/Excel/PowerPoint. Markdown export is text extraction."
-                       TextWrapping="Wrap"
-                       FontSize="12"
-                       Foreground="DarkGray"
-                       HorizontalAlignment="Center"
-                       TextAlignment="Center" />
-		</StackPanel>
-
-		<StackPanel Grid.Row="1" Spacing="8">
-			<TextBlock Text="Operation" FontWeight="SemiBold" />
-			<ComboBox ItemsSource="{Binding OperationItems}"
-                      SelectedItem="{Binding SelectedOperationItem}"
-                      HorizontalAlignment="Stretch">
-				<ComboBox.ItemTemplate>
-					<DataTemplate x:DataType="models:ConvertExportOperationItem">
-						<TextBlock Text="{Binding Label}" />
-					</DataTemplate>
-				</ComboBox.ItemTemplate>
-			</ComboBox>
-			<TextBlock Text="{Binding SelectedOperationLabel}"
-                       Foreground="DarkGray"
-                       FontSize="12" />
-		</StackPanel>
-
-		<Button Grid.Row="2"
-                Content="{Binding AddFilesButtonLabel}"
-                Command="{Binding AddFilesCommand}" />
-
-		<StackPanel Grid.Row="3" Spacing="6">
-			<TextBlock Text="SELECTED"
-                       FontWeight="SemiBold" />
-			<ListBox ItemsSource="{Binding SelectedFiles}"
-                     MinHeight="160">
-				<ListBox.ItemTemplate>
-					<DataTemplate x:DataType="vm:PdfFileItem">
-						<Border Padding="4,2">
-							<Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-								<TextBlock Grid.Column="0"
-										   Text="{Binding FileName}"
-										   TextWrapping="Wrap" />
-								<Button Grid.Column="1"
-										Content="X"
-										Command="{Binding $parent[UserControl].DataContext.RemoveFileCommand}"
-										CommandParameter="{Binding}" />
-							</Grid>
-						</Border>
-					</DataTemplate>
-				</ListBox.ItemTemplate>
-			</ListBox>
-		</StackPanel>
-
-		<StackPanel Grid.Row="4" Spacing="12">
-			<Button Content="Run Operation"
-                    Command="{Binding ExecuteCommand}"
-                    HorizontalAlignment="Left"
-                    Padding="12,8" />
-			<TextBlock Text="{Binding StatusMessage}"
-                       TextWrapping="Wrap" />
-		</StackPanel>
-	</Grid>
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PDFToys.App.ViewModels" xmlns:views="using:PDFToys.App.Views" xmlns:models="using:PDFToys.App.Models"
+             x:Class="PDFToys.App.Views.ConvertExportView" x:DataType="vm:ConvertExportViewModel">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,16,24,24" Spacing="16" MaxWidth="880" HorizontalAlignment="Stretch">
+            <Button Content="← Home" Command="{Binding GoBackCommand}" Classes="back" />
+            <StackPanel Spacing="6">
+                <TextBlock Text="Convert / Export" Classes="toolTitle" />
+                <TextBlock Text="Convert documents and images to PDF, or export PDF pages and text. Office formats require installed Word, Excel or PowerPoint." Classes="helper" />
+            </StackPanel>
+            <StackPanel Spacing="8" IsEnabled="{Binding IsIdle}">
+                <TextBlock Text="Operation" Classes="sectionTitle" />
+                <ComboBox ItemsSource="{Binding OperationItems}" SelectedItem="{Binding SelectedOperationItem}" AutomationProperties.Name="Conversion operation">
+                    <ComboBox.ItemTemplate><DataTemplate x:DataType="models:ConvertExportOperationItem"><TextBlock Text="{Binding Label}" TextWrapping="Wrap" /></DataTemplate></ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+            <StackPanel Spacing="8" IsEnabled="{Binding IsIdle}">
+                <TextBlock Text="Input files" Classes="sectionTitle" />
+                <Button Content="{Binding AddFilesButtonLabel}" Command="{Binding AddFilesCommand}" HorizontalAlignment="Left" />
+                <ListBox ItemsSource="{Binding SelectedFiles}" AutomationProperties.Name="Selected files">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PdfFileItem">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="2,4">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="{Binding FileName}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding FullPath}" Classes="helper" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="Remove" Command="{Binding $parent[UserControl].DataContext.RemoveFileCommand}" CommandParameter="{Binding}" VerticalAlignment="Center" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+            <TextBlock Text="Output: new files beside each input. Combined PDFs are saved beside the first input. Markdown extracts text and does not reproduce page layout." Classes="helper" />
+            <Button Content="Run conversion / export" Command="{Binding ExecuteCommand}" Classes="primary" HorizontalAlignment="Left" />
+            <views:OperationResultsView />
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>
