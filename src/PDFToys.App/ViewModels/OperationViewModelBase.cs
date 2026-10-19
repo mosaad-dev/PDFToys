@@ -94,23 +94,33 @@ public abstract class OperationViewModelBase : ViewModelBase
         var version = ++_jobVersion;
         StatusMessage = $"{label}…";
         var failed = new List<string>(); var completed = 0; var unchanged = 0;
-        var progress = new Progress<OperationProgress>(p =>
-        {
-            if (!IsBusy || _jobVersion != version || cancellation.IsCancellationRequested) return;
-            ProgressText = string.IsNullOrWhiteSpace(p.CurrentFile) ? p.Stage : $"{p.Stage} · {System.IO.Path.GetFileName(p.CurrentFile)}";
-            if (p.TotalPages is > 0) ProgressText += $" · page {p.CompletedPages}/{p.TotalPages}";
-        });
+        var reportedCompleted = 0; var reportedTotal = inputs.Count;
         try
         {
             foreach (var input in inputs)
             {
                 if (cancellation.IsCancellationRequested) break;
                 ProgressText = $"File {completed + 1} of {inputs.Count} · {System.IO.Path.GetFileName(input)}";
+                var fileIndex = completed;
+                var progress = new Progress<OperationProgress>(p =>
+                {
+                    if (!IsBusy || _jobVersion != version || completed != fileIndex || cancellation.IsCancellationRequested) return;
+                    var filePrefix = inputs.Count > 1 ? $"File {fileIndex + 1} of {inputs.Count} · " : string.Empty;
+                    ProgressText = filePrefix + (string.IsNullOrWhiteSpace(p.CurrentFile) ? p.Stage : $"{p.Stage} · {System.IO.Path.GetFileName(p.CurrentFile)}");
+                    if (inputs.Count == 1 && p.TotalFiles > 1) ProgressText += $" · {p.CompletedFiles}/{p.TotalFiles} files";
+                    if (p.CompletedPages is { } page && p.TotalPages is { } totalPages) ProgressText += $" · page {page}/{totalPages}";
+                });
                 OperationResult result;
                 try { result = await _runner.RunAsync(() => operation(input), cancellation.Token, progress); }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex) { result = new OperationResult(false, string.Empty, ex.Message); }
                 AddResult(input, result); completed++;
+                if (inputs.Count == 1 && result.Files.Count > 0)
+                {
+                    reportedTotal = result.Files.Count;
+                    reportedCompleted = result.Files.Count(f => f.Result.Outcome != OperationOutcome.Cancelled);
+                }
+                else if (result.Outcome != OperationOutcome.Cancelled) reportedCompleted++;
                 if (result.Outcome == OperationOutcome.Unchanged) unchanged++;
                 if (result.Files.Count == 0 && !result.IsSuccess && result.Outcome != OperationOutcome.Cancelled) failed.Add(input);
                 if (result.Files.Count > 0 && !result.IsSuccess && result.Files.All(f => f.Result.IsSuccess) && result.Outcome != OperationOutcome.Cancelled) failed.Add(input);
@@ -120,10 +130,10 @@ public abstract class OperationViewModelBase : ViewModelBase
             var cancelled = cancellation.IsCancellationRequested || Results.Any(r => r.Result.Outcome == OperationOutcome.Cancelled);
             if (cancelled)
                 foreach (var input in inputs.Skip(completed)) AddResult(input, OperationResult.Cancelled("Not processed because the operation was cancelled."));
-            StatusMessage = cancelled ? $"Cancelled after {completed}/{inputs.Count} files. Completed outputs are available below."
-                : failed.Count > 0 ? $"{label}: {failed.Distinct().Count()} file(s) need attention. See results below."
+            StatusMessage = cancelled ? $"Cancelled after {reportedCompleted}/{reportedTotal} files. Completed outputs are available below."
+                : failed.Count > 0 ? $"{label}: {Math.Max(0, reportedCompleted - failed.Distinct().Count())}/{reportedTotal} files completed; {failed.Distinct().Count()} file(s) need attention. See results below."
                 : unchanged == inputs.Count ? "Unchanged. No useful reduction; original files were preserved."
-                : $"{label}: {completed}/{inputs.Count} files completed" + (unchanged > 0 ? $" ({unchanged} unchanged)." : ".");
+                : $"{label}: {reportedCompleted}/{reportedTotal} files completed" + (unchanged > 0 ? $" ({unchanged} unchanged)." : ".");
             if (allowRetry && failed.Count > 0)
             {
                 var snapshot = failed.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();

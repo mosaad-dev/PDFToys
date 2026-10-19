@@ -95,6 +95,21 @@ public sealed class OperationWorkflowViewModelTests
     }
 
     [Fact]
+    public async Task CancelledAggregate_CountsCompletedOriginalInputs()
+    {
+        var vm = new Harness();
+        await vm.Run(["batch"], _ => new(false, "saved.png", "Cancelled")
+        {
+            Outcome = OperationOutcome.Cancelled,
+            Outputs = [new("saved.png")],
+            Files = [new("first.pdf", new(true, "saved.png", "")), new("second.pdf", OperationResult.Cancelled())]
+        });
+        Assert.Contains("1/2 files", vm.StatusMessage);
+        Assert.Contains(vm.Results, r => r.Path == "saved.png");
+        Assert.Contains(vm.Results, r => r.InputPath == "second.pdf" && r.Result.Outcome == OperationOutcome.Cancelled);
+    }
+
+    [Fact]
     public async Task FailedResultActions_SurfaceErrorInRow()
     {
         var actions = new ResultActionsStub { Throw = true };
@@ -217,10 +232,63 @@ public sealed class OperationWorkflowViewModelTests
         Assert.Equal(["good.txt", "bad.txt", "bad.txt"], conversion.Calls); Assert.Equal(2, vm.Results.Count); Assert.All(vm.Results, r => Assert.True(r.Result.IsSuccess));
     }
 
+    [Fact]
+    public async Task ConversionSummary_CountsEveryOriginalInput()
+    {
+        var conversion = new ConversionStub { Fail = false };
+        var vm = new ConvertExportViewModel(conversion, new MergeStub(), new ExportStub(), new DialogStub(), () => { }, ["first.txt", "second.txt"], new ApplicationJobRunner());
+        vm.SelectedOperationItem = vm.OperationItems.Single(i => i.Operation == ConvertExportOperation.ConvertEachToPdf);
+        await vm.ExecuteCommand.ExecuteAsync(null);
+        Assert.Contains("2/2 files completed", vm.StatusMessage);
+    }
+
+    [Fact]
+    public void BackgroundCompletion_NotifiesOnTheCapturedUiContext()
+    {
+        using var context = new PumpContext();
+        var uiThread = Environment.CurrentManagedThreadId;
+        var workerThread = uiThread;
+        var notifications = new List<int>();
+        context.Run(async () =>
+        {
+            var vm = new Harness();
+            vm.PropertyChanged += (_, _) => notifications.Add(Environment.CurrentManagedThreadId);
+            await vm.Run(["source.pdf"], _ =>
+            {
+                workerThread = Environment.CurrentManagedThreadId;
+                OperationContext.Report(new("Rendering", "source.pdf", 0, 1));
+                return new(true, "saved.pdf", "");
+            });
+            Assert.Equal("saved.pdf", Assert.Single(vm.Results).Path);
+        });
+        Assert.NotEqual(uiThread, workerThread);
+        Assert.NotEmpty(notifications);
+        Assert.All(notifications, thread => Assert.Equal(uiThread, thread));
+    }
+
     private static byte[] MakeTwoColorPng()
     {
         using var bitmap = new SKBitmap(2, 1); bitmap.SetPixel(0, 0, SKColors.Red); bitmap.SetPixel(1, 0, SKColors.Blue);
         using var image = SKImage.FromBitmap(bitmap); using var data = image.Encode(SKEncodedImageFormat.Png, 100); return data.ToArray();
+    }
+    private sealed class PumpContext : SynchronizationContext, IDisposable
+    {
+        private readonly System.Collections.Concurrent.BlockingCollection<(SendOrPostCallback Callback, object? State)> _queue = new();
+        public override void Post(SendOrPostCallback callback, object? state) => _queue.Add((callback, state));
+        public void Run(Func<Task> action)
+        {
+            var prior = Current;
+            SetSynchronizationContext(this);
+            try
+            {
+                var task = action();
+                _ = task.ContinueWith(_ => _queue.CompleteAdding(), TaskScheduler.Default);
+                foreach (var work in _queue.GetConsumingEnumerable()) work.Callback(work.State);
+                task.GetAwaiter().GetResult();
+            }
+            finally { SetSynchronizationContext(prior); }
+        }
+        public void Dispose() => _queue.Dispose();
     }
     private sealed class Harness() : OperationViewModelBase(() => { }, new ApplicationJobRunner())
     {
