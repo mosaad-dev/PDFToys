@@ -69,6 +69,7 @@ public sealed class RearrangeService : ServiceBase, IRearrangeService
             var compatibility = PdfDocumentSafety.CheckPageCopy(inputDocument);
             if (compatibility is not null) return compatibility;
             using var outputDocument = new PdfDocument();
+            PdfDocumentSafety.CopyDocumentProperties(inputDocument, outputDocument);
 
             foreach (var pageItem in pages)
             {

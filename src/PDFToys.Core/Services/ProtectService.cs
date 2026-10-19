@@ -76,13 +76,20 @@ public sealed class ProtectService : ServiceBase, IProtectService
     private static OperationResult Complete(string input, string output, bool replaceOriginal, string? password)
     {
         if (!replaceOriginal) return new(true, output, "");
-        if (SafeOutputFiles.TryReplaceOriginal(output, input, out var backup, out var error, password))
-            return new(true, input, "") { Warnings = [$"Recovery backup: {backup}"] };
-        return new(false, output, $"The original was preserved. The generated copy is available at {output}. {error}")
+        try
         {
-            ErrorCode = "ReplacementFailed",
-            Outcome = OperationOutcome.PartialSuccess,
-            Outputs = [new(output)]
-        };
+            OperationContext.Report(new("Replacing original", input, 0, 1));
+            if (SafeOutputFiles.TryReplaceOriginal(output, input, out var backup, out var error, password))
+                return new(true, input, "") { Warnings = [$"Recovery backup: {backup}"] };
+            return new(false, output, $"The original was preserved. The generated copy is available at {output}. {error}")
+            {
+                ErrorCode = "ReplacementFailed", Outcome = OperationOutcome.PartialSuccess, Outputs = [new(output)]
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            return OperationResult.Cancelled("Replacement cancelled. The original and generated copy were preserved.") with
+            { OutputPath = output, Outputs = [new(output)], Warnings = ["The original file was not replaced."] };
+        }
     }
 }

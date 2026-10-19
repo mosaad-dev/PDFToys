@@ -169,6 +169,24 @@ public sealed class JobExecutionTests : PdfTestBase
         Assert.All(result.Outputs, output => Assert.True(File.Exists(output.Path)));
     }
 
+    [Fact]
+    public void DirectExport_Cancellation_RecordsPendingFilesAndCommittedPages()
+    {
+        var first = CreatePdf("one.pdf", 2); var second = CreatePdf("two.pdf", 1);
+        using var cancellation = new CancellationTokenSource();
+        using var scope = OperationContext.Begin(cancellation.Token, new ImmediateProgress(value =>
+        {
+            if (value.CompletedPages == 2) cancellation.Cancel();
+        }));
+        var result = new ExportService([new MarkdownExportStrategy()]).Export([new(first), new(second)], new(TempDirectory, PdfExportFormat.Markdown));
+        Assert.Equal(OperationOutcome.Cancelled, result.Outcome);
+        Assert.Single(result.Outputs);
+        Assert.Equal(2, result.Files.Count);
+        Assert.Equal(second, result.Files[1].InputPath);
+        Assert.Equal(OperationOutcome.Cancelled, result.Files[1].Result.Outcome);
+        Assert.All(result.Outputs, output => Assert.True(File.Exists(output.Path)));
+    }
+
     private ConversionWorkflowService Workflow(IConversionService converter) => new(converter, new MergeService(), new ExportService([new MarkdownExportStrategy()]));
     private sealed class DelegateConverter(Func<string, ConversionOptions, OperationResult> convert) : IConversionService
     {

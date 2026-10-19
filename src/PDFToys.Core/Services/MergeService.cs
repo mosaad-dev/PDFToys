@@ -61,6 +61,7 @@ public sealed class MergeService : ServiceBase, IMergeService
                 using var inputDocument = PdfReader.Open(file.FilePath, PdfDocumentOpenMode.Import);
                 var compatibility = PdfDocumentSafety.CheckPageCopy(inputDocument);
                 if (compatibility is not null) return compatibility;
+                if (completed == 0) PdfDocumentSafety.CopyDocumentProperties(inputDocument, outputDocument);
 
                 foreach (var page in inputDocument.Pages)
                 {
@@ -74,7 +75,8 @@ public sealed class MergeService : ServiceBase, IMergeService
             outputDocument.Save(transaction.CandidatePath);
             var outputPath = transaction.CommitPdf();
 
-            return new OperationResult(true, outputPath, string.Empty);
+            return new OperationResult(true, outputPath, string.Empty)
+            { Warnings = inputs.Count > 1 ? ["Document properties and language were copied from the first input."] : [] };
         });
     }
 }

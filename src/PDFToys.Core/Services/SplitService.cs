@@ -43,6 +43,7 @@ public sealed class SplitService : ServiceBase, ISplitService
                 OperationContext.ThrowIfCancellationRequested();
                 var range = ranges[part];
                 using var output = new PdfDocument();
+                PdfDocumentSafety.CopyDocumentProperties(document, output);
                 for (var page = range.StartPage; page <= range.EndPage; page++)
                 {
                     OperationContext.ThrowIfCancellationRequested();

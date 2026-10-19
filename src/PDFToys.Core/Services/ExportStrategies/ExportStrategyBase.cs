@@ -32,6 +32,9 @@ public abstract class ExportStrategyBase : IExportStrategy
             allOutputs.AddRange(outputs);
             if (cancelled) break;
         }
+        if (cancelled && files.Count < inputs.Count)
+            files.AddRange(inputs.Skip(files.Count).Select(input => new FileOperationResult(input.FilePath,
+                OperationResult.Cancelled("Cancelled before this input was processed."))));
         var failures = files.Where(file => !file.Result.IsSuccess).ToArray();
         var success = !cancelled && failures.Length == 0 && allOutputs.Count > 0;
         return new(success, allOutputs.Count > 0 ? outputFolder : "",

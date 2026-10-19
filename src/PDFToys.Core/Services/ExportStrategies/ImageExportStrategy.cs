@@ -7,6 +7,7 @@ public sealed class ImageExportStrategy : ExportStrategyBase
 {
     public override bool CanHandle(PdfExportFormat format) => format is PdfExportFormat.Png or PdfExportFormat.Jpg or PdfExportFormat.Jpeg;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416", Justification = "Runtime desktop platform guards precede the PDFtoImage iterator and its deferred enumeration.")]
     public override OperationResult Execute(IReadOnlyList<PdfFile> inputs, ExportOptions options, string outputFolder)
     {
         if (!OperatingSystem.IsWindows() && !OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
