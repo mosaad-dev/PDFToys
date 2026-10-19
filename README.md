@@ -24,76 +24,117 @@
 
 ## Installation
 
-PDFToys runs on 64-bit Windows 10 or later. The installer is self-contained, so you do not need to install the .NET runtime separately. Microsoft Word, Excel, or PowerPoint is needed only when converting the corresponding Office documents to PDF.
+PDFToys runs on 64-bit Windows 10 or later. The installer and portable build are self-contained; a separate .NET runtime is not required. Microsoft Word, Excel, or PowerPoint is needed only for its corresponding Office documents.
 
-Download the Windows setup `.exe` from the [latest release](https://github.com/MohammedSaad114/PDFToys/releases/latest), then run the installer.
+Download a published Windows setup `.exe` from the [releases page](https://github.com/MohammedSaad114/PDFToys/releases/latest), then run the installer. It adds a Start menu entry, an optional desktop shortcut, and the classic Explorer context menu. On Windows 11, that menu is under **Show more options**. A portable ZIP can run the desktop app without installation; Explorer integration requires the installer or manual registration.
 
-Open PDFToys from the Start menu or its optional desktop shortcut. The installer registers the Explorer context menu automatically.
+The 0.2.0 candidate is prepared from the local `release/0.2.0` branch. Building it does not upload or publish a GitHub release. See the [changelog](CHANGELOG.md) for its changes and the [implementation plan](docs/NEXT_RELEASE_IMPLEMENTATION_PLAN.md) for the release verification checklist.
 
 ## Features and quick start
 
-PDFToys can merge, split, compress, protect, and unlock PDFs; organize pages; convert files to PDF; and export PDFs as images or Markdown.
+Home groups the six PDF tools under **Document tools**, with **Convert & export** in its own section. Opening a tool starts with an empty input selection. A remembered folder is a preference, not permission to select or read every PDF in it. Files explicitly passed by Explorer or a startup command remain selected.
 
-To merge PDFs:
+| Tool | Workflow |
+| --- | --- |
+| Merge PDFs | Add at least two PDFs; drag to reorder or use Move up / down, then choose **Merge files**. |
+| Split PDF | Choose or change the PDF, check its page count, then split in half, into four parts, or by ranges such as `1-5, 8, 11-13`. Each range creates a file. |
+| Compress PDF | Add PDFs and choose Standard or Maximum. Results show actual sizes, savings, changed/skipped images and explanations. |
+| Organize pages | Reorder, rotate or exclude pages. Preview includes the pending rotation; saving preserves the source page's existing rotation. |
+| Protect PDF | Enter a new opening password and choose a new copy or guarded replacement. |
+| Unlock PDF | Enter the current password and choose a new copy or guarded replacement. |
+| Convert / export | Convert images, text, Markdown, SVG or supported Office documents to PDF; combine inputs; or export PDFs as JPG, JPEG, PNG or extracted Markdown text. |
 
-1. Open PDFToys and choose **Merge PDFs**.
-2. Select at least two PDFs and drag them into the order you want.
-3. Choose **Execute Merge**. When the inputs share a folder, PDFToys saves `Merged_Output.pdf` there (adding a number if that name exists). For inputs from different folders, choose an output location in the save dialog.
+For a merge:
+
+1. Choose **Merge PDFs**, then **Add PDF files**.
+2. Select a file and move it into place using the buttons or drag-and-drop.
+3. Choose **Merge files**. Files in one folder save beside the inputs; files from different folders prompt for a location. The result row contains the actual saved path.
+
+All tools run processing in the background. Inputs and options are snapshotted when a job starts; conflicting controls stay disabled while it runs. Progress reports the available file, stage and page information. **Cancel** stops at a safe boundary, so a native call may finish its current step first. Closing the window during a job requests cancellation and waits for that safe boundary.
+
+Completed outputs stay available after a later failure or cancellation. Result rows offer **Open**, **Show in folder** and **Copy path**. **Retry failed** keeps successful results and retries failed inputs; Protect and Unlock use the password and output choice currently shown when retry starts. Combining documents retries the complete group.
 
 ![PDFToys workflow demo](docs/assets/pdftoys-demo.gif)
 
-## Limitations
+## Output safety
 
-- **Compress** recompresses embedded images. Text-only PDFs may see little size reduction.
-- **Markdown export** extracts text content; it is not layout-aware Markdown.
-- **Office conversion** requires locally installed Office applications and uses COM automation.
+- **Create new copy is the default.** Generated files are staged and validated before being committed. Existing outputs receive a numbered alternative name instead of being overwritten, even when a save dialog chooses an existing name.
+- **Inputs remain intact.** Merge, Split, Compress, Organize and conversion/export create separate outputs. Inputs with the same filename in different folders retain separate identities during batch work.
+- **Replace original is explicit.** Protect and Unlock validate a separate replacement PDF, check stable Windows file identities, and use a filesystem replacement operation that also keeps a distinct recovery backup. They refuse unsafe source aliases and do not fall back to deleting or overwriting the original if the required replacement behavior is unavailable. The result reports the backup location. If replacement fails after generation, the original and generated copy are reported separately.
+- **Cancellation is per file.** A batch is not one transaction: previously committed outputs remain valid, and uncommitted candidates are cleaned up. Results distinguish failure, partial completion, cancellation and unchanged compression.
+
+## Compression and document compatibility
+
+Standard and Maximum perform **lossy image recompression** at JPEG quality 60 and 30. They preserve text and vector content as PDF content; they do not rasterize entire pages, downsample images, provide a lossless mode or promise a target size.
+
+The supported path includes ordinary 8-bit RGB/grayscale JPEG, unfiltered images and Flate images with supported TIFF/PNG predictors. Resource traversal includes inherited resources and nested forms, with shared images processed once. Transparency masks, color-sensitive or unsupported image encodings are preserved with reasons. See the [compression support matrix](docs/COMPRESSION.md) for the exact boundaries.
+
+A changed image is kept only when its stream becomes smaller. If the complete rewritten PDF does not shrink, or no supported image can improve, PDFToys saves an unchanged copy and labels it **Unchanged**. A successful file operation does not imply that compression reduced its size.
+
+PDFToys refuses rewriting signed PDFs and PDFs with unsupported or conflicting XMP metadata. Merge, Split and Organize also refuse page-copy workflows involving encryption, interactive forms, bookmarks, named destinations/attachments, accessibility tags, layers or custom page labels that the current engine cannot safely retain. Unlock an encrypted copy first where appropriate. This protects originals rather than silently dropping those document features. It is not a claim of universal PDF feature preservation or PDF/A compliance.
+
+Markdown export extracts text; it does not recreate page layout or recognize scanned text. SVG conversion uses the current rendering path and is not a vector-preservation guarantee. OCR, page thumbnails, undo/multiselection, effective-DPI compression, target-size compression and modern Windows 11 main-menu integration remain follow-up work.
+
+## Office conversion
+
+Supported extensions are `.doc`, `.docx`, `.xls`, `.xlsx`, `.ppt` and `.pptx`. Install the corresponding desktop Office application, and close that application before conversion: PDFToys refuses to automate an existing Office session.
+
+Conversion runs through a separate PDFToys process on an STA thread, with a two-minute timeout per conversion. Macros are disabled; documents are opened read-only, and Word/Excel link updating is suppressed. Missing applications, failed automation and timeouts return errors instead of blocking the main interface indefinitely.
+
+Cancellation waits for the current Office step or its timeout. A timeout stops the owned PDFToys worker, without killing unrelated Office processes; an Office process or unanswered prompt may still require manual attention before retrying. Actual Office behavior depends on the installed application and document, so automated worker tests do not replace real Office compatibility checks.
 
 ## Building from source
 
 Developer requirements:
 
-- .NET 10 SDK for the app and tests
-- Visual Studio C++ build tools with ATL support for the native shell extension
-- Inno Setup only if compiling the installer
+- .NET 10 SDK compatible with `global.json` for the app and tests.
+- Visual Studio 2022 C++ build tools with ATL support for the native shell extension.
+- Inno Setup 6 to compile the installer.
+
+Build and test the managed projects:
 
 ```powershell
-dotnet restore src/PDFToys.Core/PDFToys.Core.csproj
 dotnet restore tests/PDFToys.Core.Tests/PDFToys.Core.Tests.csproj
-dotnet restore src/PDFToys.App/PDFToys.App.csproj
 dotnet restore tests/PDFToys.App.Tests/PDFToys.App.Tests.csproj
 
-dotnet build src/PDFToys.Core/PDFToys.Core.csproj -c Release
-dotnet build tests/PDFToys.Core.Tests/PDFToys.Core.Tests.csproj -c Release
 dotnet build src/PDFToys.App/PDFToys.App.csproj -c Release
-dotnet build tests/PDFToys.App.Tests/PDFToys.App.Tests.csproj -c Release
-
-dotnet test tests/PDFToys.Core.Tests/PDFToys.Core.Tests.csproj -c Release --no-build
-dotnet test tests/PDFToys.App.Tests/PDFToys.App.Tests.csproj -c Release --no-build
+dotnet test tests/PDFToys.Core.Tests/PDFToys.Core.Tests.csproj -c Release
+dotnet test tests/PDFToys.App.Tests/PDFToys.App.Tests.csproj -c Release
 ```
 
-CI runs the same project-scoped build and test steps on `windows-latest` via GitHub Actions.
+CI uses project-scoped Windows builds and tests. Deterministic PDF fixtures cover compression, rendering/fidelity, page rotations, output safety, batch identities, background jobs and desktop workflows. Candidate readiness is established by the final integrated verification record, not by this feature list.
 
 ## Publishing and packaging
 
-Run `build-shell-extension.ps1` from **Developer PowerShell for Visual Studio** so `msbuild` and the C++/ATL toolchain are available.
+`VERSION` is the version source for managed/native binaries, installer and release artifacts. To prepare the 0.2.0 candidate locally:
+
+```powershell
+.\scripts\build-release.ps1
+```
+
+The script runs the tests, publishes the self-contained `win-x64` app, builds the native shell extension, stages the package, runs packaged smoke checks and compiles the installer. Supply `-MsBuildPath` or `-IsccPath` when the required tools are not discoverable. `-SkipTests` is available for an already verified build; it is recorded in the manifest and is not a substitute for release validation.
+
+Outputs are prepared under `artifacts/releases/0.2.0`:
+
+- `PDFToys-0.2.0-setup.exe`
+- `PDFToys-0.2.0-win-x64.zip`
+- `SHA256SUMS.txt`
+- `release-manifest.json`, including source commit, file sizes/hashes, test-script selection and installer signing status.
+
+Packaging does not sign or publish the release automatically. Configure and verify Authenticode signing separately before distribution; do not treat an unsigned artifact as signed. Installer install/upgrade/uninstall checks, desktop smoke, real Office coverage and signing status belong in the final release readiness evidence.
+
+The lower-level scripts remain available:
 
 ```powershell
 .\scripts\publish.ps1
 .\scripts\build-shell-extension.ps1
 .\scripts\package-layout.ps1
-```
-
-Compile the optional Inno Setup installer after `package-layout.ps1`:
-
-```powershell
 iscc installer\PDFToys.iss
 ```
 
-Release builds should be signed with Authenticode (`signtool`) before distribution. See the commented placeholder in `scripts\publish.ps1`.
-
 ## Developer shell-extension setup
 
-The installer registers and unregisters the Explorer context menu for users. If you built from source without the installer, first run the publishing and packaging scripts above. The shell extension requires `PDFToys.App.exe` beside its DLL, so register the packaged DLL from an elevated PowerShell session in the repository root:
+The installer registers and unregisters the Explorer context menu. For a manual build, run the packaging scripts first; `PDFToys.App.exe` must remain beside the shell DLL. Register the packaged DLL from an elevated PowerShell session in the repository root:
 
 ```powershell
 .\scripts\register-shell-extension.ps1 -DllPath ".\artifacts\package\PDFToys.ShellExtension.dll"
@@ -107,16 +148,20 @@ To unregister a manually installed extension:
 
 ## Security and data handling
 
-- **Office COM**: Converting `.doc`, `.docx`, `.xls`, `.xlsx`, `.ppt`, and `.pptx` launches Word, Excel, or PowerPoint invisibly via COM.
-- **Replace original**: Protect and Unlock can overwrite the source PDF. A best-effort backup is written to `{filename}.pdftoys.bak` before overwrite when possible.
-- **Headless logs**: Context-menu headless runs write diagnostics to `%LocalAppData%\PDFToys\logs`. Logs include file paths and error messages, not passwords.
-- **Settings**: User preferences are stored in `%LocalAppData%\PDFToys\settings.json`.
+- **Local processing:** PDF and image work runs locally. Office conversion launches the installed Office application through the bounded worker described above.
+- **Passwords:** Opening passwords stay in memory for the current workflow; they are excluded from settings and diagnostic logs.
+- **Recovery files:** Guarded replacement leaves a distinct `.pdftoys.bak` recovery file beside the original; its exact path appears in the result warning. Keep it until the replacement has been checked.
+- **Headless logs:** Context-menu headless runs write diagnostics to `%LocalAppData%\PDFToys\logs`. Logs contain file paths and error messages.
+- **Settings:** User preferences are stored in `%LocalAppData%\PDFToys\settings.json`. A remembered workspace does not auto-select files when opening a tool from Home.
 
 ## Troubleshooting / reporting issues
 
-- **Explorer menu missing:** On Windows 11, right-click a PDF and choose **Show more options** to find the classic PDFToys context menu. If it still does not appear, reinstall PDFToys. Developers using a manual build can use the registration script above.
-- **Context-menu operation fails:** Check `%LocalAppData%\PDFToys\logs` for the latest diagnostic log. The same folder can be opened by entering that path in File Explorer's address bar.
-- **Report a bug:** If the repository is accessible to you, open an issue in [GitHub Issues](https://github.com/MohammedSaad114/PDFToys/issues). Include your PDFToys and Windows versions, steps to reproduce, the expected and actual result, and relevant log messages. Remove private file paths before sharing logs.
+- **Explorer menu missing:** On Windows 11, choose **Show more options**. If the classic PDFToys menu is still missing, reinstall or repair the installation. Developers can use the registration script above.
+- **Compression unchanged:** Read the image skip reasons and sizes in Results. Text-only PDFs, already optimized images and unsupported image types may have no useful reduction.
+- **Unsupported document features:** The original is preserved. Use a suitable unsigned/unlocked copy or a tool that explicitly supports those document features.
+- **Office conversion fails:** Close the corresponding Office application, resolve any Office prompt, and retry. Confirm that the application is installed and licensed for use.
+- **Context-menu operation fails:** Inspect `%LocalAppData%\PDFToys\logs` for the latest diagnostic log.
+- **Report a bug:** Use [GitHub Issues](https://github.com/MohammedSaad114/PDFToys/issues). Include PDFToys/Windows versions, reproduction steps, expected/actual results and relevant errors. Remove private file paths before sharing logs.
 
 ## Changelog and license
 

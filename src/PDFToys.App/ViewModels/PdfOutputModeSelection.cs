@@ -8,7 +8,7 @@ namespace PDFToys.App.ViewModels;
 public sealed class PdfOutputModeSelection : ViewModelBase
 {
     public const string ReplaceOriginalWarning =
-        "The original will be replaced only after a recovery copy is verified. The recovery location appears in the results.";
+        "The replacement PDF is validated and a recovery copy is kept when the original is replaced. The recovery location appears in the results.";
 
     private PdfOutputModeItem _selectedOutputModeItem;
 
