@@ -1,5 +1,8 @@
 using PdfSharp.Pdf.IO;
 using PDFToys.Core.Models;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 
 namespace PDFToys.Core.Services;
 
@@ -114,24 +117,43 @@ public static class SafeOutputFiles
             if (!File.Exists(candidate) || new FileInfo(candidate).Length == 0)
                 throw new IOException("The replacement output was not created.");
             if (!File.Exists(original)) throw new FileNotFoundException("The original file no longer exists.", original);
-            using (var replacement = PdfReader.Open(candidate, password ?? string.Empty, PdfDocumentOpenMode.Import))
-            {
-                if (replacement.PageCount == 0) throw new InvalidDataException("The replacement PDF has no pages.");
-            }
+            // FullPath does not resolve junctions, symbolic links, short names or hard
+            // links. Require stable identities before any backup/replacement activity.
+            // Refuse platforms/filesystems without this facility rather than using an
+            // unsafe path-only fallback for a destructive operation.
+            if (!OperatingSystem.IsWindows())
+                throw new PlatformNotSupportedException("Safe replacement of originals is supported only on Windows. Keep the generated copy instead.");
+            using var originalHandle = File.OpenHandle(original, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
+            var originalIdentity = WindowsReplacementFiles.GetIdentity(originalHandle);
             OperationContext.ThrowIfCancellationRequested();
-            // File.Replace creates the backup and replaces as one filesystem operation.
-            // On filesystems that do not support this, fail safely instead of copy/delete.
-            backupPath = original + $".{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}.pdftoys.bak";
             using var staging = OutputFileTransaction.Create(Path.Combine(Path.GetDirectoryName(original)!, Path.GetFileName(original)));
-            File.Copy(candidate, staging.CandidatePath, overwrite: false);
-            using (var staged = File.OpenRead(staging.CandidatePath))
-            using (var supplied = File.OpenRead(candidate))
+            WindowsReplacementFiles.FileIdentity candidateIdentity;
+            using (var supplied = new FileStream(candidate, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
-                if (staged.Length != supplied.Length) throw new IOException("Replacement validation failed.");
+                candidateIdentity = WindowsReplacementFiles.GetIdentity(supplied.SafeFileHandle);
+                if (candidateIdentity == originalIdentity)
+                    throw new IOException("Replacement must be a different file from the original, including linked or aliased paths.");
+                // Copy from the inspected handle while denying writes and deletion of
+                // that file. Validate the actual staged bytes that will replace it.
+                using (var staged = new FileStream(staging.CandidatePath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    supplied.CopyTo(staged);
+                    staged.Flush(flushToDisk: true);
+                }
+                using (var replacement = PdfReader.Open(staging.CandidatePath, password ?? string.Empty, PdfDocumentOpenMode.Import))
+                {
+                    if (replacement.PageCount == 0) throw new InvalidDataException("The replacement PDF has no pages.");
+                }
+                OperationContext.ThrowIfCancellationRequested();
+                // File.Replace creates a distinct recovery backup atomically. There
+                // is deliberately no copy/delete fallback if the filesystem refuses it.
+                backupPath = original + $".{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}.pdftoys.bak";
+                File.Replace(staging.CandidatePath, original, backupPath, ignoreMetadataErrors: false);
             }
-            OperationContext.ThrowIfCancellationRequested();
-            File.Replace(staging.CandidatePath, original, backupPath, ignoreMetadataErrors: false);
-            try { File.Delete(candidate); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            // A parent junction could now resolve somewhere else. Delete only the
+            // inspected candidate, through its handle; never follow a fresh path delete.
+            WindowsReplacementFiles.TryDeleteInspectedCandidate(candidate, candidateIdentity);
             return true;
         }
         catch (OperationCanceledException) { throw; }
@@ -140,5 +162,66 @@ public static class SafeOutputFiles
             error = ex.Message;
             return false;
         }
+    }
+
+    private static class WindowsReplacementFiles
+    {
+        internal readonly record struct FileIdentity(ulong Volume, ulong Low, ulong High);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativeFileIdentity
+        {
+            public ulong Volume;
+            public ulong Low;
+            public ulong High;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct FileDisposition
+        {
+            public byte DeleteFile;
+        }
+
+        internal static FileIdentity GetIdentity(SafeFileHandle handle)
+        {
+            if (!GetFileInformationByHandleEx(handle, 18 /* FileIdInfo */, out var identity,
+                    (uint)Marshal.SizeOf<NativeFileIdentity>()))
+                throw new IOException("The filesystem cannot provide the stable file identity required for safe replacement.",
+                    new Win32Exception(Marshal.GetLastPInvokeError()));
+            return new(identity.Volume, identity.Low, identity.High);
+        }
+
+        internal static void TryDeleteInspectedCandidate(string path, FileIdentity expected)
+        {
+            try
+            {
+                var extendedPath = path.StartsWith(@"\\?\", StringComparison.Ordinal) ? path
+                    : path.StartsWith(@"\\", StringComparison.Ordinal) ? @"\\?\UNC\" + path[2..] : @"\\?\" + path;
+                using var handle = CreateFile(extendedPath, 0x00010080 /* DELETE | FILE_READ_ATTRIBUTES */,
+                    7 /* share read/write/delete */, IntPtr.Zero, 3 /* OPEN_EXISTING */, 0, IntPtr.Zero);
+                if (handle.IsInvalid || GetIdentity(handle) != expected) return;
+                var disposition = new FileDisposition { DeleteFile = 1 };
+                _ = SetFileInformationByHandle(handle, 4 /* FileDispositionInfo */, ref disposition,
+                    (uint)Marshal.SizeOf<FileDisposition>());
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            // Cleanup is best effort. A retained candidate is safer than deleting a
+            // path that no longer denotes the generated file.
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetFileInformationByHandleEx(SafeFileHandle handle, int informationClass,
+            out NativeFileIdentity information, uint size);
+
+        [DllImport("kernel32.dll", EntryPoint = "CreateFileW", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern SafeFileHandle CreateFile(string path, uint access, uint share, IntPtr security,
+            uint disposition, uint flags, IntPtr template);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetFileInformationByHandle(SafeFileHandle handle, int informationClass,
+            ref FileDisposition information, uint size);
     }
 }

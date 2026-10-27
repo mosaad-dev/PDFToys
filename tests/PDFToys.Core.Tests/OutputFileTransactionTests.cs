@@ -1,8 +1,10 @@
 using PDFToys.Core.Models;
 using PDFToys.Core.Services;
+using System.Diagnostics;
 
 namespace PDFToys.Core.Tests;
 
+[Collection("Filesystem link integration")]
 public sealed class OutputFileTransactionTests : PdfTestBase
 {
     [Fact]
@@ -62,7 +64,7 @@ public sealed class OutputFileTransactionTests : PdfTestBase
         Assert.Equal(original, File.ReadAllBytes(source));
     }
 
-    [Fact]
+    [WindowsFact]
     public void ReplaceOriginal_ProducesVerifiedDistinctBackup()
     {
         var original = CreatePdf("original.pdf", 1);
@@ -87,7 +89,7 @@ public sealed class OutputFileTransactionTests : PdfTestBase
         Assert.Equal(originalBytes, File.ReadAllBytes(original));
     }
 
-    [Fact]
+    [WindowsFact]
     public void ReplaceOriginal_LockedFileFailsWithoutLosingEitherFile()
     {
         var original = CreatePdf("original.pdf", 1);
@@ -100,6 +102,95 @@ public sealed class OutputFileTransactionTests : PdfTestBase
             Assert.True(File.Exists(replacement));
         }
         Assert.Equal(originalBytes, File.ReadAllBytes(original));
+    }
+
+    [WindowsFact]
+    public void ReplaceOriginal_DirectoryJunctionAlias_IsRejectedWithoutDeletingOriginalOrPriorBackup()
+    {
+        var real = Path.Combine(TempDirectory, "real");
+        Directory.CreateDirectory(real);
+        var original = CreatePdf(Path.Combine("real", "original.pdf"), 1);
+        var originalBytes = File.ReadAllBytes(original);
+        var priorBackup = original + ".prior.pdftoys.bak";
+        File.WriteAllText(priorBackup, "previous recovery copy");
+        var priorBytes = File.ReadAllBytes(priorBackup);
+        var aliasDirectory = Path.Combine(TempDirectory, "alias");
+        CreateWindowsLink("Junction", aliasDirectory, real);
+        try
+        {
+            var alias = Path.Combine(aliasDirectory, "original.pdf");
+            Assert.Equal(originalBytes, File.ReadAllBytes(alias));
+            Assert.False(SafeOutputFiles.TryReplaceOriginal(alias, original, out var backup, out var error));
+            Assert.Empty(backup);
+            Assert.Contains("different file", error);
+            Assert.Equal(originalBytes, File.ReadAllBytes(original));
+            Assert.Equal(originalBytes, File.ReadAllBytes(alias));
+            Assert.Equal(priorBytes, File.ReadAllBytes(priorBackup));
+            Assert.Empty(Directory.GetFiles(real, ".pdftoys-*"));
+        }
+        finally { Directory.Delete(aliasDirectory); }
+    }
+
+    [WindowsFact]
+    public void ReplaceOriginal_HardLinkAlias_IsRejectedAndBothNamesRemain()
+    {
+        var original = CreatePdf("hardlink-original.pdf", 1);
+        var alias = Path.Combine(TempDirectory, "hardlink-alias.pdf");
+        var bytes = File.ReadAllBytes(original);
+        CreateWindowsLink("HardLink", alias, original);
+        Assert.False(SafeOutputFiles.TryReplaceOriginal(alias, original, out var backup, out var error));
+        Assert.Empty(backup);
+        Assert.Contains("different file", error);
+        Assert.Equal(bytes, File.ReadAllBytes(original));
+        Assert.Equal(bytes, File.ReadAllBytes(alias));
+    }
+
+    [WindowsFact]
+    public void ReplaceOriginal_RepeatedReplacement_RetainsEveryPriorBackup()
+    {
+        var original = CreatePdf("original.pdf", 1);
+        var first = CreatePdf("first.pdf", 2);
+        var second = CreatePdf("second.pdf", 3);
+        var originalBytes = File.ReadAllBytes(original);
+        var firstBytes = File.ReadAllBytes(first);
+        var secondBytes = File.ReadAllBytes(second);
+        Assert.True(SafeOutputFiles.TryReplaceOriginal(first, original, out var firstBackup, out var firstError), firstError);
+        Assert.True(SafeOutputFiles.TryReplaceOriginal(second, original, out var secondBackup, out var secondError), secondError);
+        Assert.NotEqual(firstBackup, secondBackup);
+        Assert.Equal(originalBytes, File.ReadAllBytes(firstBackup));
+        Assert.Equal(firstBytes, File.ReadAllBytes(secondBackup));
+        Assert.Equal(secondBytes, File.ReadAllBytes(original));
+        Assert.False(File.Exists(first));
+        Assert.False(File.Exists(second));
+    }
+
+    private static void CreateWindowsLink(string type, string path, string target)
+    {
+        // Junction creation needs no developer-mode symlink privilege on Windows.
+        // Pass generated paths as environment values rather than embedding shell text.
+        var start = new ProcessStartInfo("powershell.exe")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        start.ArgumentList.Add("-NoProfile");
+        start.ArgumentList.Add("-NonInteractive");
+        start.ArgumentList.Add("-Command");
+        start.ArgumentList.Add("$ErrorActionPreference='Stop'; New-Item -ItemType $env:PDFTOYS_LINK_TYPE -Path $env:PDFTOYS_LINK_PATH -Target $env:PDFTOYS_LINK_TARGET | Out-Null");
+        start.Environment["PDFTOYS_LINK_TYPE"] = type;
+        start.Environment["PDFTOYS_LINK_PATH"] = path;
+        start.Environment["PDFTOYS_LINK_TARGET"] = target;
+        using var process = Process.Start(start)!;
+        Assert.True(process.WaitForExit(15000), "Timed out creating the generated link fixture.");
+        Assert.True(process.ExitCode == 0, $"Creating the generated {type} fixture failed with exit code {process.ExitCode}.");
+    }
+
+    private sealed class WindowsFactAttribute : FactAttribute
+    {
+        public WindowsFactAttribute()
+        {
+            if (!OperatingSystem.IsWindows()) Skip = "Windows filesystem identity and junction integration test.";
+        }
     }
 
     [Fact]
@@ -135,3 +226,7 @@ public sealed class OutputFileTransactionTests : PdfTestBase
         Assert.False(OperationContext.CancellationToken.IsCancellationRequested);
     }
 }
+
+// Keep link-fixture child processes separate from concurrent native PDF rendering.
+[CollectionDefinition("Filesystem link integration", DisableParallelization = true)]
+public sealed class FilesystemLinkIntegrationCollection;
