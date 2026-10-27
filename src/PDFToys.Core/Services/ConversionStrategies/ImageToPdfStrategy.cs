@@ -1,4 +1,4 @@
-﻿using PdfSharp.Drawing;
+using PdfSharp.Drawing;
 using PdfSharp.Pdf;
 using PDFToys.Core.Models;
 
@@ -21,12 +21,13 @@ public sealed class ImageToPdfStrategy : BaseConversionStrategy
         var heightPt = image.PointHeight <= 0 ? A4HeightPoints : image.PointHeight;
 
         var page = document.AddPage();
-        page.Width = widthPt;
-        page.Height = heightPt;
+        page.Width = XUnit.FromPoint(widthPt);
+        page.Height = XUnit.FromPoint(heightPt);
 
         using var gfx = XGraphics.FromPdfPage(page);
         gfx.DrawImage(image, 0, 0, widthPt, heightPt);
 
+        OperationContext.ThrowIfCancellationRequested();
         document.Save(outputFilePath);
 
         return new OperationResult(true, Path.GetFullPath(outputFilePath), string.Empty);

@@ -13,6 +13,12 @@ class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        if (PDFToys.Core.OS.Windows.OfficeWorkerHost.TryRun(args, out var officeExitCode))
+        {
+            Environment.ExitCode = officeExitCode;
+            return;
+        }
+
         if (TryRunHeadlessConversion(args, out var exitCode))
         {
             Environment.ExitCode = exitCode;

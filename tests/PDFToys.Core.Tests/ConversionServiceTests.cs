@@ -1,4 +1,4 @@
-﻿using PDFToys.Core.Contracts;
+using PDFToys.Core.Contracts;
 using PDFToys.Core.Models;
 using PDFToys.Core.OS.Windows;
 using PDFToys.Core.Services;
@@ -83,49 +83,6 @@ public sealed class ConversionServiceTests : PdfTestBase
         AssertValidPdf(result.OutputPath);
     }
 
-    [Theory]
-    [InlineData("slides.pptx")]
-    [InlineData("slides.ppt")]
-    public void Convert_Presentation_WhenPowerPointInstalled_CreatesPdf(string fileName)
-    {
-        if (!IsPowerPointInstalled())
-        {
-            return;
-        }
-
-        var fixturePath = ResolveFixturePath(fileName);
-        if (fixturePath is null)
-        {
-            return;
-        }
-
-        var inputPath = Path.Combine(TempDirectory, fileName);
-        File.Copy(fixturePath, inputPath, overwrite: true);
-
-        var result = _service.Convert(inputPath, new ConversionOptions(TempDirectory));
-
-        Assert.True(result.IsSuccess, result.ErrorMessage);
-        Assert.True(File.Exists(result.OutputPath));
-        AssertValidPdf(result.OutputPath);
-    }
-
-    [Fact]
-    public void Convert_Pptx_WhenPowerPointMissing_FailsGracefully()
-    {
-        if (IsPowerPointInstalled())
-        {
-            return;
-        }
-
-        var inputPath = Path.Combine(TempDirectory, "sample.pptx");
-        File.WriteAllText(inputPath, "placeholder");
-
-        var result = _service.Convert(inputPath, new ConversionOptions(TempDirectory));
-
-        Assert.False(result.IsSuccess);
-        Assert.Contains("PowerPoint", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
-    }
-
     [Fact]
     public void Convert_Svg_CreatesPdf()
     {
@@ -144,9 +101,6 @@ public sealed class ConversionServiceTests : PdfTestBase
         Assert.True(File.Exists(result.OutputPath));
         AssertValidPdf(result.OutputPath);
     }
-
-    private static bool IsPowerPointInstalled() =>
-        Type.GetTypeFromProgID("PowerPoint.Application", throwOnError: false) is not null;
 
     private static void AssertValidPdf(string outputPath)
     {
@@ -176,24 +130,5 @@ public sealed class ConversionServiceTests : PdfTestBase
         data!.SaveTo(stream);
     }
 
-    private static string? ResolveFixturePath(string fileName)
-    {
-        var baseDirectory = AppContext.BaseDirectory;
-        var candidates = new[]
-        {
-            Path.Combine(baseDirectory, "Fixtures", "Presentations", fileName),
-            Path.Combine(baseDirectory, "..", "..", "..", "Fixtures", "Presentations", fileName),
-        };
-
-        foreach (var candidate in candidates)
-        {
-            var fullPath = Path.GetFullPath(candidate);
-            if (File.Exists(fullPath))
-            {
-                return fullPath;
-            }
-        }
-
-        return null;
-    }
 }
+

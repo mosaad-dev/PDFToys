@@ -1,4 +1,4 @@
-﻿using PdfSharp.Drawing;
+using PdfSharp.Drawing;
 using PdfSharp.Pdf;
 using SkiaSharp;
 using Svg.Skia;
@@ -58,13 +58,14 @@ public sealed class SvgToPdfStrategy : BaseConversionStrategy
             var heightPt = pdfImage.PointHeight <= 0 ? A4HeightPoints : pdfImage.PointHeight;
 
             var page = document.AddPage();
-            page.Width = widthPt;
-            page.Height = heightPt;
+            page.Width = XUnit.FromPoint(widthPt);
+            page.Height = XUnit.FromPoint(heightPt);
 
             using var gfx = XGraphics.FromPdfPage(page);
             gfx.DrawImage(pdfImage, 0, 0, widthPt, heightPt);
 
-            document.Save(outputFilePath);
+            OperationContext.ThrowIfCancellationRequested();
+        document.Save(outputFilePath);
         }
         finally
         {

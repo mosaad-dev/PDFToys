@@ -46,24 +46,37 @@ public sealed class MergeService : ServiceBase, IMergeService
                 return new OperationResult(false, string.Empty, "Output file name is required.");
             }
 
+            if (Path.GetFileName(options.OutputFileName) != options.OutputFileName || !options.OutputFileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+                return new(false, "", "Output file name must be a PDF file name without a directory.");
+
             Directory.CreateDirectory(options.OutputDirectory);
 
             using var outputDocument = new PdfDocument();
 
+            var completed = 0;
             foreach (var file in inputs!)
             {
+                OperationContext.ThrowIfCancellationRequested();
+                OperationContext.Report(new("Merging document", file.FilePath, completed, inputs.Count));
                 using var inputDocument = PdfReader.Open(file.FilePath, PdfDocumentOpenMode.Import);
+                var compatibility = PdfDocumentSafety.CheckPageCopy(inputDocument);
+                if (compatibility is not null) return compatibility;
+                if (completed == 0) PdfDocumentSafety.CopyDocumentProperties(inputDocument, outputDocument);
 
                 foreach (var page in inputDocument.Pages)
                 {
+                    OperationContext.ThrowIfCancellationRequested();
                     outputDocument.AddPage(page);
                 }
+                completed++;
             }
 
-            var outputPath = Path.GetFullPath(Path.Combine(options.OutputDirectory, options.OutputFileName));
-            outputDocument.Save(outputPath);
+            using var transaction = OutputFileTransaction.Create(Path.Combine(options.OutputDirectory, options.OutputFileName), inputs[0].FilePath);
+            outputDocument.Save(transaction.CandidatePath);
+            var outputPath = transaction.CommitPdf();
 
-            return new OperationResult(true, outputPath, string.Empty);
+            return new OperationResult(true, outputPath, string.Empty)
+            { Warnings = inputs.Count > 1 ? ["Document properties and language were copied from the first input."] : [] };
         });
     }
 }

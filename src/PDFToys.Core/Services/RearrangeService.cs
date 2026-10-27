@@ -59,13 +59,22 @@ public sealed class RearrangeService : ServiceBase, IRearrangeService
                 return new OperationResult(false, string.Empty, "At least one page must be included.");
             }
 
-            var outputPath = PrepareOutputEnvironment(input.FilePath, options.OutputDirectory, "Rearranged");
+            if (options.OutputFileName is not null && (Path.GetFileName(options.OutputFileName) != options.OutputFileName || !options.OutputFileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)))
+                return new(false, "", "Output file name must be a PDF file name without a directory.");
+            using var transaction = options.OutputFileName is null
+                ? OutputFileTransaction.CreatePdf(input.FilePath, options.OutputDirectory, "Rearranged")
+                : OutputFileTransaction.Create(Path.Combine(options.OutputDirectory, options.OutputFileName), input.FilePath);
 
             using var inputDocument = PdfReader.Open(input.FilePath, PdfDocumentOpenMode.Import);
+            var compatibility = PdfDocumentSafety.CheckPageCopy(inputDocument);
+            if (compatibility is not null) return compatibility;
             using var outputDocument = new PdfDocument();
+            PdfDocumentSafety.CopyDocumentProperties(inputDocument, outputDocument);
 
             foreach (var pageItem in pages)
             {
+                OperationContext.ThrowIfCancellationRequested();
+                OperationContext.Report(new("Organizing pages", input.FilePath, 0, 1, outputDocument.PageCount, pages.Count));
                 if (pageItem.SourcePageIndex < 0 || pageItem.SourcePageIndex >= inputDocument.PageCount)
                 {
                     return new OperationResult(
@@ -74,11 +83,17 @@ public sealed class RearrangeService : ServiceBase, IRearrangeService
                         $"Page index out of range: {pageItem.SourcePageIndex} (0-based).");
                 }
 
-                var page = outputDocument.AddPage(inputDocument.Pages[pageItem.SourcePageIndex]);
-                page.Rotation = ToPageRotation(pageItem.RotationDegrees);
+                if (pageItem.RotationDegrees % 90 != 0)
+                    return new OperationResult(false, string.Empty, "Page rotation must be a multiple of 90 degrees.");
+
+                var sourcePage = inputDocument.Pages[pageItem.SourcePageIndex];
+                var rotation = GetEffectiveRotation(sourcePage);
+                var page = outputDocument.AddPage(sourcePage);
+                page.Rotation = ToPageRotation(rotation + pageItem.RotationDegrees);
             }
 
-            outputDocument.Save(outputPath);
+            outputDocument.Save(transaction.CandidatePath);
+            var outputPath = transaction.CommitPdf();
 
             return new OperationResult(true, Path.GetFullPath(outputPath), string.Empty);
         });
@@ -94,5 +109,16 @@ public sealed class RearrangeService : ServiceBase, IRearrangeService
             270 => PageRotation.Rotate90DegreesLeft,
             _ => PageRotation.None
         };
+    }
+
+    private static int GetEffectiveRotation(PdfDictionary page)
+    {
+        var visited = new HashSet<PdfDictionary>();
+        for (PdfDictionary? node = page; node is not null && visited.Add(node);)
+        {
+            if (node.Elements.ContainsKey("/Rotate")) return node.Elements.GetInteger("/Rotate");
+            node = node.Elements.GetDictionary("/Parent");
+        }
+        return 0;
     }
 }
