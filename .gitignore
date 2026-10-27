@@ -25,6 +25,9 @@
 *.map
 *.exp
 
+# MSBuild tracking logs
+*.tlog/
+
 # Debug files
 *.dSYM/
 *.idb
