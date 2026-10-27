@@ -12,7 +12,7 @@ public sealed class AboutViewModel : ViewModelBase
     {
         GoBackCommand = new DelegateCommand(goBackAction);
         var version = Assembly.GetExecutingAssembly().GetName().Version;
-        VersionText = version is null ? "0.1.0" : version.ToString(3);
+        VersionText = version is null ? "0.2.0" : version.ToString(3);
         LicensePath = Path.Combine(AppContext.BaseDirectory, "LICENSE");
         NoticePath = Path.Combine(AppContext.BaseDirectory, "NOTICE");
         OpenLicenseCommand = new DelegateCommand(() => OpenDocument(LicensePath));
@@ -36,7 +36,10 @@ public sealed class AboutViewModel : ViewModelBase
     public ICommand OpenLicenseCommand { get; }
     public ICommand OpenNoticesCommand { get; }
 
-    private static void OpenDocument(string path)
+    private string _statusMessage = string.Empty;
+    public string StatusMessage { get => _statusMessage; private set { _statusMessage = value; OnPropertyChanged(); } }
+
+    private void OpenDocument(string path)
     {
         if (!File.Exists(path))
         {
@@ -45,7 +48,8 @@ public sealed class AboutViewModel : ViewModelBase
 
         var startInfo = new ProcessStartInfo("notepad.exe") { UseShellExecute = false };
         startInfo.ArgumentList.Add(path);
-        Process.Start(startInfo);
+        try { Process.Start(startInfo); }
+        catch (Exception ex) { StatusMessage = $"Could not open document: {ex.Message}"; }
     }
 
     private sealed class DelegateCommand(Action execute) : ICommand

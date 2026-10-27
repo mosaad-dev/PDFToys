@@ -40,6 +40,23 @@ public sealed class AvaloniaFileDialogService : IFileDialogService
             .ToArray();
     }
 
+    public async Task<string?> PickPdfFileAsync()
+    {
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop ||
+            desktop.MainWindow?.StorageProvider is null)
+        {
+            return null;
+        }
+
+        var files = await desktop.MainWindow.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            AllowMultiple = false,
+            Title = "Select a PDF",
+            FileTypeFilter = [new FilePickerFileType("PDF files") { Patterns = ["*.pdf"] }]
+        });
+        return files.FirstOrDefault()?.Path.LocalPath;
+    }
+
     public async Task<IReadOnlyList<string>> PickPdfFilesAsync()
     {
         if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop ||

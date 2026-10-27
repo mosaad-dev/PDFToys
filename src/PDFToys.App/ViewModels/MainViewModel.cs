@@ -73,6 +73,11 @@ public sealed class MainViewModel : ViewModelBase
 
     public void NavigateTo(ViewModelBase page)
     {
+        if (CurrentPage is OperationViewModelBase { IsBusy: true } operation)
+        {
+            operation.StatusMessage = "Wait for the operation to finish, or choose Cancel before returning home.";
+            return;
+        }
         CurrentPage = page;
     }
 
@@ -153,13 +158,13 @@ public sealed class MainViewModel : ViewModelBase
     {
         return new HomeViewModel(
             NavigateTo,
-            () => BuildMergePage(workspaceDirectory),
-            () => BuildSplitPage(workspaceDirectory),
-            () => BuildCompressPage(workspaceDirectory),
-            () => BuildProtectPage(workspaceDirectory),
-            () => BuildOrganizePagesPage(workspaceDirectory),
-            () => BuildUnlockPage(workspaceDirectory),
-            () => BuildConvertExportPage(workspaceDirectory),
+            () => CreateMergeViewModel(),
+            () => CreateSplitViewModel(),
+            () => CreateCompressViewModel(),
+            () => CreateProtectViewModel(),
+            () => CreateOrganizePagesViewModel(),
+            () => CreateUnlockViewModel(),
+            () => CreateConvertExportViewModel(),
             () => new AboutViewModel(GoHome),
             workspaceDirectory);
     }
@@ -167,89 +172,6 @@ public sealed class MainViewModel : ViewModelBase
     private void GoHome()
     {
         CurrentPage = CreateHomeViewModel(_startupWorkspace);
-    }
-
-    private MergeViewModel BuildMergePage(string? currentWorkspace)
-    {
-        var mergeViewModel = CreateMergeViewModel();
-        var workspaceFiles = BuildWorkspacePdfPaths(currentWorkspace);
-        mergeViewModel.MergeItems.Clear();
-        var order = 1;
-        foreach (var filePath in workspaceFiles)
-        {
-            mergeViewModel.MergeItems.Add(new MergeItem(filePath, order));
-            order++;
-        }
-
-        mergeViewModel.StatusMessage = mergeViewModel.MergeItems.Count == 0
-            ? "Please select at least 2 PDFs."
-            : $"{mergeViewModel.MergeItems.Count} PDF files selected.";
-        return mergeViewModel;
-    }
-
-    private SplitViewModel BuildSplitPage(string? currentWorkspace)
-    {
-        var splitViewModel = CreateSplitViewModel();
-        var workspaceFiles = BuildWorkspacePdfPaths(currentWorkspace);
-        splitViewModel.SelectedFilePath = workspaceFiles.FirstOrDefault() ?? string.Empty;
-        splitViewModel.StatusMessage = string.IsNullOrWhiteSpace(splitViewModel.SelectedFilePath)
-            ? "Please select a PDF file first."
-            : "Ready to split selected PDF.";
-        return splitViewModel;
-    }
-
-    private ProtectViewModel BuildProtectPage(string? currentWorkspace)
-    {
-        var workspaceFiles = BuildWorkspacePdfPaths(currentWorkspace);
-        var protectViewModel = CreateProtectViewModel(workspaceFiles);
-        protectViewModel.StatusMessage = protectViewModel.SelectedFiles.Count == 0
-            ? "Please select PDF files first."
-            : $"Ready to protect {protectViewModel.SelectedFiles.Count} files.";
-        return protectViewModel;
-    }
-
-    private CompressViewModel BuildCompressPage(string? currentWorkspace)
-    {
-        var workspaceFiles = BuildWorkspacePdfPaths(currentWorkspace);
-        var compressViewModel = CreateCompressViewModel(workspaceFiles);
-        compressViewModel.StatusMessage = compressViewModel.SelectedFiles.Count == 0
-            ? "Please select PDF files first."
-            : $"Ready to compress {compressViewModel.SelectedFiles.Count} files.";
-        return compressViewModel;
-    }
-
-    private OrganizePagesViewModel BuildOrganizePagesPage(string? currentWorkspace)
-    {
-        var workspaceFiles = BuildWorkspacePdfPaths(currentWorkspace);
-        return CreateOrganizePagesViewModel(workspaceFiles.FirstOrDefault());
-    }
-
-    private UnlockViewModel BuildUnlockPage(string? currentWorkspace)
-    {
-        var workspaceFiles = BuildWorkspacePdfPaths(currentWorkspace);
-        var unlockViewModel = CreateUnlockViewModel(workspaceFiles);
-        unlockViewModel.StatusMessage = unlockViewModel.SelectedFiles.Count == 0
-            ? "Please select PDF files first."
-            : $"Ready to unlock {unlockViewModel.SelectedFiles.Count} files.";
-        return unlockViewModel;
-    }
-
-    private ConvertExportViewModel BuildConvertExportPage(string? currentWorkspace)
-    {
-        return CreateConvertExportViewModel(BuildWorkspacePdfPaths(currentWorkspace));
-    }
-
-    private static List<string> BuildWorkspacePdfPaths(string? workspaceDirectory)
-    {
-        if (string.IsNullOrWhiteSpace(workspaceDirectory) || !Directory.Exists(workspaceDirectory))
-        {
-            return [];
-        }
-
-        return Directory
-            .GetFiles(workspaceDirectory, "*.pdf")
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .ToList();
     }
 
     private MergeViewModel CreateMergeViewModel()
@@ -262,7 +184,9 @@ public sealed class MainViewModel : ViewModelBase
     private SplitViewModel CreateSplitViewModel()
     {
         var splitService = _serviceProvider.GetRequiredService<ISplitService>();
-        return new SplitViewModel(splitService, GoHome);
+        return new SplitViewModel(splitService, GoHome,
+            _serviceProvider.GetRequiredService<IFileDialogService>(),
+            _serviceProvider.GetRequiredService<IRearrangeService>());
     }
 
     private ProtectViewModel CreateProtectViewModel(IEnumerable<string>? initialFiles = null)

@@ -5,7 +5,7 @@ using System.Windows.Input;
 
 namespace PDFToys.App.ViewModels;
 
-public sealed class PagePreviewViewModel : ViewModelBase
+public sealed class PagePreviewViewModel : ViewModelBase, IDisposable
 {
     private Bitmap? _previewImage;
     private string _detailsText = string.Empty;
@@ -84,6 +84,8 @@ public sealed class PagePreviewViewModel : ViewModelBase
     public bool HasPreviewImage => PreviewImage is not null;
 
     public ICommand CloseCommand { get; }
+
+    public void Dispose() => PreviewImage?.Dispose();
 
     private sealed class DelegateCommand(Action execute) : ICommand
     {

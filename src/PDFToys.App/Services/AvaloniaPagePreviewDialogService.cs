@@ -18,13 +18,14 @@ public sealed class AvaloniaPagePreviewDialogService : IPagePreviewDialogService
         }
 
         var window = new PagePreviewWindow();
-        window.DataContext = new PagePreviewViewModel(
+        using var viewModel = new PagePreviewViewModel(
             request.Title,
             request.DetailsText,
             request.ImagePngBytes,
             request.ErrorMessage,
             () => window.Close());
 
+        window.DataContext = viewModel;
         await window.ShowDialog(desktop.MainWindow);
     }
 }

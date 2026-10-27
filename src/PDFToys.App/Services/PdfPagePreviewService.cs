@@ -12,6 +12,11 @@ public sealed class PdfPagePreviewService : IPdfPagePreviewService
     {
         try
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                return new PagePreviewResult(false, null, "PDF page previews are available on Windows.");
+            }
+
             if (string.IsNullOrWhiteSpace(filePath))
             {
                 return new PagePreviewResult(false, null, "PDF file path is required.");

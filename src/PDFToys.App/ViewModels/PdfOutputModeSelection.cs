@@ -8,7 +8,7 @@ namespace PDFToys.App.ViewModels;
 public sealed class PdfOutputModeSelection : ViewModelBase
 {
     public const string ReplaceOriginalWarning =
-        "Warning: this will overwrite the selected PDF file. Make sure you have a backup.";
+        "The replacement PDF is validated and a recovery copy is kept when the original is replaced. The recovery location appears in the results.";
 
     private PdfOutputModeItem _selectedOutputModeItem;
 

@@ -1,59 +1,29 @@
-<UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:vm="using:PDFToys.App.ViewModels"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d"
-             x:Class="PDFToys.App.Views.SplitView"
-             x:DataType="vm:SplitViewModel">
-	<Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*"
-          RowSpacing="15"
-          Margin="20">
-		<Button Grid.Row="0" Content="← Back to Hub" Command="{Binding GoBackCommand}" Background="Transparent" Foreground="LightSkyBlue" Cursor="Hand" Margin="0,0,0,15" HorizontalAlignment="Left" />
-
-		<TextBlock Grid.Row="1"
-                   Text="{Binding SelectedFileLabel}"
-                   TextWrapping="Wrap"
-                   MaxLines="2"
-                   Foreground="DarkGray"
-                   FontSize="12" />
-
-		<StackPanel Grid.Row="2"
-                    Spacing="8">
-			<TextBlock Text="Quick Splits"
-                       FontWeight="SemiBold" />
-			<StackPanel Orientation="Horizontal"
-                        Spacing="8">
-				<Button Content="Split in Half"
-                        Command="{Binding SplitPresetCommand}"
-                        CommandParameter="half" />
-				<Button Content="Split into 4"
-                        Command="{Binding SplitPresetCommand}"
-                        CommandParameter="quarter" />
-			</StackPanel>
-		</StackPanel>
-
-		<StackPanel Grid.Row="3"
-                    Spacing="8">
-			<TextBlock Text="Custom Ranges"
-                       FontWeight="SemiBold" />
-			<TextBox Text="{Binding CustomRangeText}"
-                     Watermark="e.g. 1-5, 8, 11-13"
-                     Width="250"
-                     HorizontalAlignment="Left"
-                     Margin="0,10,0,20" />
-		</StackPanel>
-
-		<StackPanel Grid.Row="4"
-                    Orientation="Horizontal"
-                    Spacing="8">
-			<Button Content="Execute Custom Split"
-                    Command="{Binding ExecuteCustomSplitCommand}" />
-			<TextBlock Text="{Binding StatusMessage}"
-                       VerticalAlignment="Center"
-                       TextWrapping="Wrap"
-                       MaxWidth="300"
-                       Foreground="LightGreen" />
-		</StackPanel>
-	</Grid>
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PDFToys.App.ViewModels" xmlns:views="using:PDFToys.App.Views" xmlns:models="using:PDFToys.App.Models"
+             x:Class="PDFToys.App.Views.SplitView" x:DataType="vm:SplitViewModel">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,16,24,24" Spacing="16" MaxWidth="880" HorizontalAlignment="Stretch">
+            <Button Content="← Home" Command="{Binding GoBackCommand}" Classes="back" />
+            <StackPanel Spacing="6">
+                <TextBlock Text="Split PDF" Classes="toolTitle" />
+                <TextBlock Text="Create separate PDFs from page ranges. Each comma-separated range becomes its own file." Classes="helper" />
+            </StackPanel>
+            <StackPanel Spacing="8" IsEnabled="{Binding IsIdle}">
+                <TextBlock Text="Input PDF" Classes="sectionTitle" />
+                <Button Content="Choose / change PDF" Command="{Binding SelectPdfCommand}" HorizontalAlignment="Left" />
+                <TextBlock Text="{Binding SelectedFileLabel}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding PageCountLabel}" Classes="helper" />
+                <TextBlock Text="Quick split" Classes="sectionTitle" Margin="0,8,0,0" />
+                <WrapPanel>
+                    <Button Content="Split in half" Command="{Binding SplitPresetCommand}" CommandParameter="half" Margin="0,0,8,8" />
+                    <Button Content="Split into 4" Command="{Binding SplitPresetCommand}" CommandParameter="quarter" Margin="0,0,0,8" />
+                </WrapPanel>
+                <TextBlock Text="Custom page ranges" Classes="sectionTitle" />
+                <TextBox Text="{Binding CustomRangeText}" PlaceholderText="1-5, 8, 11-13" AutomationProperties.Name="Page ranges" />
+                <TextBlock Text="Page numbers start at 1. Example: 1-5, 8 creates two files. New files are saved beside the original." Classes="helper" />
+            </StackPanel>
+            <Button Content="Split page ranges" Command="{Binding ExecuteCustomSplitCommand}" Classes="primary" HorizontalAlignment="Left" />
+            <views:OperationResultsView />
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>
