@@ -28,8 +28,6 @@ PDFToys runs on 64-bit Windows 10 or later. The installer and portable build are
 
 Download a published Windows setup `.exe` from the [releases page](https://github.com/MohammedSaad114/PDFToys/releases/latest), then run the installer. It adds a Start menu entry, an optional desktop shortcut, and the classic Explorer context menu. On Windows 11, that menu is under **Show more options**. A portable ZIP can run the desktop app without installation; Explorer integration requires the installer or manual registration.
 
-The 0.2.0 candidate is prepared from the local `release/0.2.0` branch. Building it does not upload or publish a GitHub release. See the [changelog](CHANGELOG.md) for its changes and the [implementation plan](docs/NEXT_RELEASE_IMPLEMENTATION_PLAN.md) for the release verification checklist.
-
 ## Features and quick start
 
 Home groups the six PDF tools under **Document tools**, with **Convert & export** in its own section. Opening a tool starts with an empty input selection. A remembered folder is a preference, not permission to select or read every PDF in it. Files explicitly passed by Explorer or a startup command remain selected.
@@ -67,21 +65,17 @@ Completed outputs stay available after a later failure or cancellation. Result r
 
 Standard and Maximum perform **lossy image recompression** at JPEG quality 60 and 30. They preserve text and vector content as PDF content; they do not rasterize entire pages, downsample images, provide a lossless mode or promise a target size.
 
-The supported path includes ordinary 8-bit RGB/grayscale JPEG, unfiltered images and Flate images with supported TIFF/PNG predictors. Resource traversal includes inherited resources and nested forms, with shared images processed once. Transparency masks, color-sensitive or unsupported image encodings are preserved with reasons. See the [compression support matrix](docs/COMPRESSION.md) for the exact boundaries.
+Transparency masks, color-sensitive or unsupported image encodings are preserved with reasons.
 
 A changed image is kept only when its stream becomes smaller. If the complete rewritten PDF does not shrink, or no supported image can improve, PDFToys saves an unchanged copy and labels it **Unchanged**. A successful file operation does not imply that compression reduced its size.
 
 PDFToys refuses rewriting signed PDFs and PDFs with unsupported or conflicting XMP metadata. Merge, Split and Organize also refuse page-copy workflows involving encryption, interactive forms, bookmarks, named destinations/attachments, accessibility tags, layers or custom page labels that the current engine cannot safely retain. Unlock an encrypted copy first where appropriate. This protects originals rather than silently dropping those document features. It is not a claim of universal PDF feature preservation or PDF/A compliance.
 
-Markdown export extracts text; it does not recreate page layout or recognize scanned text. SVG conversion uses the current rendering path and is not a vector-preservation guarantee. OCR, page thumbnails, undo/multiselection, effective-DPI compression, target-size compression and modern Windows 11 main-menu integration remain follow-up work.
+Markdown export extracts text; it does not recreate page layout or recognize scanned text. SVG conversion uses the current rendering path and is not a vector-preservation guarantee.
 
 ## Office conversion
 
-Supported extensions are `.doc`, `.docx`, `.xls`, `.xlsx`, `.ppt` and `.pptx`. Install the corresponding desktop Office application, and close that application before conversion: PDFToys refuses to automate an existing Office session.
-
-Conversion runs through a separate PDFToys process on an STA thread, with a two-minute timeout per conversion. Macros are disabled; documents are opened read-only, and Word/Excel link updating is suppressed. Missing applications, failed automation and timeouts return errors instead of blocking the main interface indefinitely.
-
-Cancellation waits for the current Office step or its timeout. A timeout stops the owned PDFToys worker, without killing unrelated Office processes; an Office process or unanswered prompt may still require manual attention before retrying. Actual Office behavior depends on the installed application and document, so automated worker tests do not replace real Office compatibility checks.
+Supported extensions are `.doc`, `.docx`, `.xls`, `.xlsx`, `.ppt` and `.pptx`. Conversion requires the corresponding desktop Office application and uses Windows COM automation.
 
 ## Building from source
 
@@ -102,28 +96,11 @@ dotnet test tests/PDFToys.Core.Tests/PDFToys.Core.Tests.csproj -c Release
 dotnet test tests/PDFToys.App.Tests/PDFToys.App.Tests.csproj -c Release
 ```
 
-CI uses project-scoped Windows builds and tests. Deterministic PDF fixtures cover compression, rendering/fidelity, page rotations, output safety, batch identities, background jobs and desktop workflows. Candidate readiness is established by the final integrated verification record, not by this feature list.
+CI runs project-scoped Windows builds and tests.
 
 ## Publishing and packaging
 
-`VERSION` is the version source for managed/native binaries, installer and release artifacts. To prepare the 0.2.0 candidate locally:
-
-```powershell
-.\scripts\build-release.ps1
-```
-
-The script runs the tests, publishes the self-contained `win-x64` app, builds the native shell extension, stages the package, runs packaged smoke checks and compiles the installer. Supply `-MsBuildPath` or `-IsccPath` when the required tools are not discoverable. `-SkipTests` is available for an already verified build; it is recorded in the manifest and is not a substitute for release validation.
-
-Outputs are prepared under `artifacts/releases/0.2.0`:
-
-- `PDFToys-0.2.0-setup.exe`
-- `PDFToys-0.2.0-win-x64.zip`
-- `SHA256SUMS.txt`
-- `release-manifest.json`, including source commit, file sizes/hashes, test-script selection and installer signing status.
-
-Packaging does not sign or publish the release automatically. Configure and verify Authenticode signing separately before distribution; do not treat an unsigned artifact as signed. Installer install/upgrade/uninstall checks, desktop smoke, real Office coverage and signing status belong in the final release readiness evidence.
-
-The lower-level scripts remain available:
+Run the scripts from Developer PowerShell for Visual Studio, then compile the optional Inno Setup installer:
 
 ```powershell
 .\scripts\publish.ps1
@@ -131,6 +108,8 @@ The lower-level scripts remain available:
 .\scripts\package-layout.ps1
 iscc installer\PDFToys.iss
 ```
+
+Release builds can be signed with Authenticode (`signtool`) before distribution.
 
 ## Developer shell-extension setup
 

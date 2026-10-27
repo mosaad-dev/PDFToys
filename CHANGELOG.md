@@ -1,8 +1,6 @@
 # Changelog
 
-## 0.2.0 — release candidate, unpublished
-
-The implementation is integrated locally on `release/0.2.0`. Final candidate verification, installer lifecycle checks, Office coverage and signing evidence are tracked separately; this entry does not assert publication or final readiness.
+## 0.2.0 (Unreleased)
 
 ### PDF correctness and safe outputs
 
@@ -31,12 +29,6 @@ The implementation is integrated locally on `release/0.2.0`. Final candidate ver
 - Align the SDK/runtime build on .NET 10 and use `VERSION` for the 0.2.0 managed/native/installer version.
 - Add a local release pipeline for the self-contained app, native extension, setup executable, portable ZIP, checksums and manifest under `artifacts/releases/0.2.0`.
 - Add deterministic PDF fixtures and regression coverage for decoding/fidelity, safety, rotations, collisions, job lifecycle, GUI/CLI parity and desktop results.
-
-### Remaining limitations and follow-up scope
-
-Standard/Maximum are lossy image presets, not target-size or lossless modes. Unsupported images remain intact. Markdown exports extracted text, SVG conversion does not guarantee vector preservation, and scanned-text OCR is unavailable. Office conversion requires the corresponding installed desktop application and a closed existing session.
-
-Lossless-backend adoption, effective-DPI downsampling, target-size compression, before/after quality comparison, thumbnails, undo/multiselection, OCR, scan cleanup, redaction and Windows 11 main-menu integration remain deferred. Compatibility checks do not certify universal PDF-feature preservation or PDF/A compliance.
 
 ## 0.1.0
 
