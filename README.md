@@ -100,16 +100,15 @@ CI runs project-scoped Windows builds and tests.
 
 ## Publishing and packaging
 
-Run the scripts from Developer PowerShell for Visual Studio, then compile the optional Inno Setup installer:
+Run the release build from PowerShell 7 with Visual Studio 2022 C++/ATL tools and Inno Setup 6 installed:
 
 ```powershell
-.\scripts\publish.ps1
-.\scripts\build-shell-extension.ps1
-.\scripts\package-layout.ps1
-iscc installer\PDFToys.iss
+.\scripts\build-release.ps1
 ```
 
-Release builds can be signed with Authenticode (`signtool`) before distribution.
+The build runs managed tests, themed layout and cancellation checks, publishes the self-contained app, builds the shell extension, and checks the packaged workflows. It creates an installer, portable ZIP, dependency notices, checksums and a manifest under `artifacts/releases/<version>`. Set the shared managed/native/installer version in `VERSION`. Use `-MsBuildPath` or `-IsccPath` when those tools cannot be found automatically.
+
+The workflow in `.github/workflows/release.yml` can also build a candidate manually through GitHub Actions. It uploads build artifacts; publication and Authenticode signing remain separate steps.
 
 ## Developer shell-extension setup
 

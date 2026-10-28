@@ -39,7 +39,9 @@ public sealed class ImageExportStrategy : ExportStrategyBase
                     }
                     var path = transaction.Commit(candidate =>
                     {
-                        using var decoded = SKBitmap.Decode(candidate);
+                        // Decode a memory snapshot so native codecs cannot retain an
+                        // OS file handle across the immediate candidate move/cleanup.
+                        using var decoded = SKBitmap.Decode(File.ReadAllBytes(candidate));
                         return decoded is not null && decoded.Width > 0 && decoded.Height > 0;
                     });
                     outputs.Add(new(path));

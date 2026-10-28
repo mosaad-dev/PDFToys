@@ -12,6 +12,8 @@
     <PackageReference Include="PdfPig" Version="0.1.14" />
     <PackageReference Include="SkiaSharp" Version="3.119.2" />
     <PackageReference Include="Svg.Skia" Version="5.0.0" />
+    <!-- Override PDFsharp's older transitive cryptography package. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.2" />
   </ItemGroup>
 
 </Project>

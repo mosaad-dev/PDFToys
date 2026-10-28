@@ -1,5 +1,7 @@
 #define MyAppName "PDFToys"
-#define MyAppVersion "0.1.0"
+#define VersionFile FileOpen(AddBackslash(SourcePath) + "..\VERSION")
+#define MyAppVersion Trim(FileRead(VersionFile))
+#expr FileClose(VersionFile)
 #define MyAppPublisher "PDFToys"
 #define MyAppExeName "PDFToys.App.exe"
 
@@ -16,6 +18,9 @@ OutputBaseFilename=PDFToys-{#MyAppVersion}-setup
 Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=admin
+CloseApplications=yes
+RestartApplications=no
+SetupLogging=yes
 ArchitecturesAllowed=x64os
 ArchitecturesInstallIn64BitMode=x64os
 
@@ -33,10 +38,17 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\register-shell-extension.ps1"" -DllPath ""{app}\PDFToys.ShellExtension.dll"""; StatusMsg: "Registering shell extension..."; Flags: runhidden 64bit
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\scripts\register-shell-extension.ps1"" -DllPath ""{app}\PDFToys.ShellExtension.dll"""; StatusMsg: "Registering shell extension..."; Flags: runhidden 64bit; AfterInstall: CheckShellRegistration
 
 [UninstallRun]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\register-shell-extension.ps1"" -Action unregister -DllPath ""{app}\PDFToys.ShellExtension.dll"""; Flags: runhidden 64bit
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\scripts\register-shell-extension.ps1"" -Action unregister -DllPath ""{app}\PDFToys.ShellExtension.dll"""; Flags: runhidden 64bit; RunOnceId: "UnregisterPDFToysShellExtension"
 
-[UninstallDelete]
-Type: filesandordirs; Name: "{localappdata}\PDFToys\logs"
+[Code]
+procedure CheckShellRegistration;
+var
+  RegisteredPath: String;
+begin
+  if (not RegQueryStringValue(HKLM64, 'SOFTWARE\Classes\CLSID\{2a97e713-bd5f-45c4-a410-e57a3c3d86a4}\InprocServer32', '', RegisteredPath)) or
+     (CompareText(RegisteredPath, ExpandConstant('{app}\PDFToys.ShellExtension.dll')) <> 0) then
+    RaiseException('PDFToys files were installed, but Explorer registration failed. Run the installer again as administrator.');
+end;

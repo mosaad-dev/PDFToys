@@ -13,6 +13,11 @@ class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // PDFsharp's Core build has no default font resolver. Initialize this
+        // before both headless conversion and desktop startup can create XFont.
+        if (OperatingSystem.IsWindows() && PdfSharp.Fonts.GlobalFontSettings.FontResolver is null)
+            PdfSharp.Fonts.GlobalFontSettings.FontResolver = new WindowsPdfFontResolver();
+
         if (PDFToys.Core.OS.Windows.OfficeWorkerHost.TryRun(args, out var officeExitCode))
         {
             Environment.ExitCode = officeExitCode;

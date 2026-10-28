@@ -11,5 +11,15 @@ PDFToys includes or depends on the following open-source components:
 - Svg.Skia (MIT) — https://github.com/wieslawsoltes/Svg.Skia
 - CommunityToolkit.Mvvm (MIT) — https://github.com/CommunityToolkit/dotnet
 - Microsoft.Extensions.DependencyInjection (MIT) — https://github.com/dotnet/runtime
+- PDFium and its native dependencies — https://pdfium.googlesource.com/pdfium/
+- HarfBuzzSharp and HarfBuzz — https://github.com/mono/SkiaSharp
+- ANGLE — https://chromium.googlesource.com/angle/angle/
+- Inter fonts (SIL Open Font License 1.1) — https://github.com/rsms/inter
+- Svg.Custom (Microsoft Public License) — https://github.com/wieslawsoltes/Svg.Skia
+- Self-contained .NET runtime (MIT and third-party licenses) — https://github.com/dotnet/runtime
+
+Packaged releases include a licenses directory containing package-specific
+copyright attributions, upstream license texts and native third-party notices.
+See licenses/packages.json for the exact restored dependency versions.
 
 PDFToys itself is distributed under the Apache License 2.0. See LICENSE in the repository root.

@@ -147,6 +147,26 @@ public sealed class DocumentPreservationTests : PdfTestBase
     }
 
     [Fact]
+    public void Split_PreservesCustomAndIndirectDocumentProperties()
+    {
+        var path = Path.Combine(TempDirectory, "custom-info.pdf");
+        using (var document = new PdfDocument())
+        {
+            document.AddPage();
+            document.Info.Elements.SetString("/Company", "PDFToys fixture company");
+            var title = new PdfStringObject(document, "Indirect title");
+            document.Internals.AddObject(title);
+            document.Info.Elements["/Title"] = title.Reference!;
+            document.Save(path);
+        }
+        var result = new SplitService().Split(new(path), new(TempDirectory, 1));
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        using var output = PdfReader.Open(Assert.Single(result.Outputs).Path, PdfDocumentOpenMode.Import);
+        Assert.Equal("PDFToys fixture company", output.Info.Elements.GetString("/Company"));
+        Assert.Equal("Indirect title", output.Info.Title);
+    }
+
+    [Fact]
     public void Rearrange_RejectsCustomXmpWithoutChangingOriginal()
     {
         var input = Path.Combine(TempDirectory, "xmp.pdf");

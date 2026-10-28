@@ -7,6 +7,25 @@ namespace PDFToys.Core.Tests;
 
 public sealed class ExportServiceTests : PdfTestBase
 {
+    [Theory]
+    [InlineData(PdfExportFormat.Jpeg)]
+    [InlineData(PdfExportFormat.Png)]
+    public void Export_ImageValidation_ReleasesAllFileHandlesBeforeReturning(PdfExportFormat format)
+    {
+        var input = CreatePdf("handle-cleanup.pdf", 2);
+        var result = new ExportService([new ImageExportStrategy()]).Export([new(input)], new(TempDirectory, format));
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        Assert.Equal(2, result.Outputs.Count);
+        foreach (var output in result.Outputs)
+        {
+            using (var exclusive = new FileStream(output.Path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                Assert.True(exclusive.Length > 0);
+            var renamed = output.Path + ".renamed";
+            File.Move(output.Path, renamed);
+            File.Delete(renamed);
+        }
+    }
+
     private readonly ExportService _service;
 
     public ExportServiceTests()

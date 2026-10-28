@@ -267,6 +267,23 @@ public sealed class CompressionRegressionTests : PdfTestBase
     }
 
     [Fact]
+    public void Compress_EncoderFailure_ReportsSafeSkipWithoutClaimingAlreadyOptimized()
+    {
+        var source = CompressionFixtures.Create(TempDirectory, "encoder-failure.pdf");
+        var service = new CompressionService(new FailingCompressor());
+        var result = service.Compress(new(source), new(TempDirectory, CompressionLevel.Normal));
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        Assert.Equal(OperationOutcome.Unchanged, result.Outcome);
+        Assert.Equal(0, result.Compression!.ImagesChanged);
+        Assert.Equal(1, result.Compression.ImagesSkipped);
+        Assert.Equal(0, result.Compression.BytesSaved);
+        Assert.Contains(result.Compression.SkipReasons, reason => reason.Contains("encoded safely"));
+        Assert.DoesNotContain(result.Warnings, warning => warning.Contains("already smaller"));
+        Assert.Equal(File.ReadAllBytes(source), File.ReadAllBytes(result.OutputPath));
+        Assert.Equal(result.OutputPath, Assert.Single(result.Outputs).Path);
+    }
+
+    [Fact]
     public void Compress_WholeDocumentCandidateLarger_RestoresExactOriginalAndReportsActualCounts()
     {
         var source = CompressionFixtures.Create(TempDirectory, "small-document.pdf", squareSize: 24, minimal: true);
@@ -293,22 +310,38 @@ public sealed class CompressionRegressionTests : PdfTestBase
         Assert.False(File.Exists(Path.Combine(TempDirectory, "signature_Compressed.pdf")));
     }
 
-    [Fact]
-    public void Compress_EncryptedDocument_DoesNotSilentlyRemoveEncryption()
+    [Theory]
+    [InlineData("")]
+    [InlineData("reader-secret")]
+    public void Compress_OwnerOnlyAndUserPasswordEncryption_DoesNotSilentlyRemoveProtection(string userPassword)
     {
         var source = CompressionFixtures.Create(TempDirectory, "unencrypted.pdf");
         var encrypted = Path.Combine(TempDirectory, "encrypted.pdf");
         using (var document = PdfReader.Open(source, PdfDocumentOpenMode.Modify))
         {
             document.SecuritySettings.OwnerPassword = "owner-secret";
+            if (userPassword.Length > 0) document.SecuritySettings.UserPassword = userPassword;
             document.Save(encrypted);
+        }
+        using (var inspection = PdfReader.Open(encrypted, userPassword, PdfDocumentOpenMode.Import))
+        {
+            // Owner-only encryption is readable without a password, and PDFsharp's
+            // IsEncrypted flag can be false after import. Prove this fixture has a
+            // real retained Standard encryption dictionary before testing refusal.
+            Assert.Contains(inspection.Internals.GetAllObjects().OfType<PdfDictionary>(), item =>
+                item.Elements["/Filter"] is PdfName { Value: "/Standard" } &&
+                item.Elements.ContainsKey("/O") && item.Elements.ContainsKey("/U"));
+            Assert.True(PdfDocumentSafety.IsEncryptedInput(inspection));
         }
         var bytes = File.ReadAllBytes(encrypted);
         var result = Compress(encrypted);
         Assert.False(result.IsSuccess);
+        Assert.Equal(OperationOutcome.Failed, result.Outcome);
+        Assert.NotEmpty(result.ErrorMessage);
         Assert.Empty(result.Outputs);
         Assert.Equal(bytes, File.ReadAllBytes(encrypted));
         Assert.False(File.Exists(Path.Combine(TempDirectory, "encrypted_Compressed.pdf")));
+        Assert.Empty(Directory.GetFiles(TempDirectory, ".pdftoys-*"));
     }
 
     [Fact]
@@ -384,8 +417,11 @@ public sealed class CompressionRegressionTests : PdfTestBase
     private static PdfDictionary Image(PdfDocument document) =>
         (PdfDictionary)((PdfReference)document.Pages[0].Elements.GetDictionary("/Resources")!.Elements.GetDictionary("/XObject")!.Elements["/Im0"]!).Value;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416", Justification = "The renderer helper checks the supported desktop platforms before invoking PDFtoImage.")]
     private static void AssertRenderDifference(string before, string after, double maximumMeanError)
     {
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+            throw new PlatformNotSupportedException("PDF rendering comparison requires a supported desktop platform.");
         using var original = PDFtoImage.Conversion.ToImage(File.ReadAllBytes(before));
         using var compressed = PDFtoImage.Conversion.ToImage(File.ReadAllBytes(after));
         Assert.Equal(original.Width, compressed.Width);
@@ -410,6 +446,11 @@ public sealed class CompressionRegressionTests : PdfTestBase
             Calls++;
             return new SkiaImageCompressor().Compress(imageBytes, quality);
         }
+    }
+
+    private sealed class FailingCompressor : IImageCompressor
+    {
+        public CompressedImageResult? Compress(byte[] imageBytes, int quality) => null;
     }
 
     private sealed class CancellingCompressor(CancellationTokenSource cancellation) : IImageCompressor

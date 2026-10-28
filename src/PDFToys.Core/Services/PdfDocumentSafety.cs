@@ -44,6 +44,8 @@ public static class PdfDocumentSafety
         var signed = CheckRewrite(document);
         if (signed is not null) return signed;
         if (IsEncryptedInput(document)) return Unsupported("encryption; unlock this PDF first");
+        if (document.Info.Elements.Values.Any(value => value is not null && CloneInformationValue(value) is null))
+            return Unsupported("complex custom document properties");
         var catalog = document.Internals.Catalog;
         var features = new (string Key, string Name)[]
         {
@@ -62,9 +64,30 @@ public static class PdfDocumentSafety
 
     public static void CopyDocumentProperties(PdfDocument source, PdfDocument destination)
     {
-        foreach (var key in new[] { "/Title", "/Author", "/Subject", "/Keywords", "/Creator", "/Producer", "/CreationDate", "/ModDate" })
-            if (source.Info.Elements[key] is { } value) destination.Info.Elements[key] = value.Clone();
+        foreach (var key in source.Info.Elements.Keys)
+            if (source.Info.Elements[key] is { } value && CloneInformationValue(value) is { } copied)
+                destination.Info.Elements[key] = copied;
         destination.Language = source.Language;
+    }
+
+    private static PdfItem? CloneInformationValue(PdfItem value)
+    {
+        var visited = new HashSet<PdfItem>(ReferenceEqualityComparer.Instance);
+        while (value is PdfSharp.Pdf.Advanced.PdfReference reference)
+        {
+            if (!visited.Add(value) || reference.Value is null) return null;
+            value = reference.Value;
+        }
+        return value switch
+        {
+            PdfStringObject text => new PdfString(text.Value, PdfStringEncoding.Unicode),
+            PdfNameObject name => new PdfName(name.Value),
+            PdfIntegerObject number => new PdfInteger(number.Value),
+            PdfRealObject number => new PdfReal(number.Value),
+            PdfBooleanObject boolean => new PdfBoolean(boolean.Value),
+            PdfString or PdfDate or PdfName or PdfInteger or PdfReal or PdfBoolean or PdfNull => value.Clone(),
+            _ => null
+        };
     }
 
     // PDFsharp 6.2.4 regenerates XMP on Save. Reject properties the engine would discard,

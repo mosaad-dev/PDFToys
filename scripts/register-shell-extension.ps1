@@ -27,7 +27,7 @@ if (-not $isAdmin)
 if ($Action -eq "register")
 {
     $process = Start-Process -FilePath "$env:SystemRoot\System32\regsvr32.exe" `
-    -ArgumentList "/s `"$DllPath`"" -Wait -PassThru
+    -ArgumentList "/s `"$DllPath`"" -WindowStyle Hidden -Wait -PassThru
 
 if ($process.ExitCode -ne 0)
 {
@@ -39,7 +39,7 @@ Write-Host "Registered $DllPath"
 else
 {
     $process = Start-Process -FilePath "$env:SystemRoot\System32\regsvr32.exe" `
-        -ArgumentList "/s /u `"$DllPath`"" -Wait -PassThru
+        -ArgumentList "/s /u `"$DllPath`"" -WindowStyle Hidden -Wait -PassThru
 
     if ($process.ExitCode -ne 0)
     {

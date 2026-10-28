@@ -25,7 +25,7 @@ public sealed class CompressionService : ServiceBase, ICompressionService
 
         OperationContext.Report(new("Inspecting PDF", input.FilePath, 0, 1));
         using var document = PdfReader.Open(input.FilePath, PdfDocumentOpenMode.Modify);
-        if (document.SecuritySettings.IsEncrypted)
+        if (PdfDocumentSafety.IsEncryptedInput(document))
             return new(false, string.Empty, "Unlock this PDF before compressing it; encryption settings cannot be retained by this operation.")
                 { ErrorCode = "encrypted-pdf" };
         var documentSafetyError = PdfDocumentSafety.CheckRewrite(document);
@@ -37,6 +37,7 @@ public sealed class CompressionService : ServiceBase, ICompressionService
         var processed = 0;
         var changed = 0;
         var supported = 0;
+        var alreadySmaller = 0;
         var walker = new PdfImageResourceWalker(message => AddDistinct(warnings, message));
         var quality = options.Level == CompressionLevel.Maximum ? MaximumJpegQuality : NormalJpegQuality;
         var images = new List<(PdfDictionary Image, int Page)>();
@@ -85,6 +86,7 @@ public sealed class CompressionService : ServiceBase, ICompressionService
             }
             if (result.Bytes.Length >= image.Stream!.Value.Length)
             {
+                alreadySmaller++;
                 AddDistinct(reasons, "An image was already smaller than the selected JPEG encoding and was preserved.");
                 continue;
             }
@@ -98,7 +100,9 @@ public sealed class CompressionService : ServiceBase, ICompressionService
         {
             AddDistinct(warnings, supported == 0
                 ? "No supported image objects could be recompressed. An unchanged copy was saved."
-                : "The supported images are already smaller than the selected encoding. An unchanged copy was saved.");
+                : alreadySmaller == supported
+                    ? "The supported images are already smaller than the selected encoding. An unchanged copy was saved."
+                    : "No image changes could be retained safely. An unchanged copy was saved.");
             File.Copy(input.FilePath, output.CandidatePath, overwrite: false);
             candidateSize = originalSize;
         }

@@ -7,6 +7,9 @@
 - Decode supported RGB/grayscale JPEG and ordinary 8-bit Flate/predictor images before recompression; traverse nested/inherited resources and process shared objects once.
 - Preserve masked, color-sensitive and unsupported image streams with explicit reasons. Keep a byte-identical unchanged output when image changes cannot reduce the complete PDF.
 - Report original/candidate/final sizes, savings, changed/skipped image counts and typed unchanged/partial/cancelled outcomes.
+- Refuse owner-only encrypted compression inputs and distinguish failed image encoding from images that are already smaller.
+- Preserve supported custom and indirect document properties when copying pages; refuse complex properties that cannot be retained safely.
+- Release image-validation file handles before exported files are moved or returned.
 - Commit validated candidates to unique names without overwriting existing inputs or outputs; separate equal-basename inputs during batch conversions and exports.
 - Guard Protect/Unlock replacements with staged PDF validation, stable Windows file identity checks and an atomic recovery backup. Report the generated copy when replacement cannot finish safely.
 - Preserve existing/inherited page rotations and compose requested rotation deltas. Organize preview displays pending rotation.
@@ -28,6 +31,8 @@
 - Keep the UI responsive while Office finishes its current step; timeout stops the owned PDFToys worker without killing unrelated Office processes. Office itself may need manual attention afterward.
 - Align the SDK/runtime build on .NET 10 and use `VERSION` for the 0.2.0 managed/native/installer version.
 - Add a local release pipeline for the self-contained app, native extension, setup executable, portable ZIP, checksums and manifest under `artifacts/releases/0.2.0`.
+- Configure Windows fonts for production text conversion, pin the transitive cryptography dependency, and audit dependency vulnerabilities during builds.
+- Include dependency redistribution notices and verify themed layouts, cancellation, packaged workflows and native COM activation before packaging.
 - Add deterministic PDF fixtures and regression coverage for decoding/fidelity, safety, rotations, collisions, job lifecycle, GUI/CLI parity and desktop results.
 
 ## 0.1.0

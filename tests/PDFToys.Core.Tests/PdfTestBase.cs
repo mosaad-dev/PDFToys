@@ -38,8 +38,8 @@ public abstract class PdfTestBase : IDisposable
         using var document = new PdfDocument();
         using var image = XImage.FromFile(imagePath);
         var page = document.AddPage();
-        page.Width = width;
-        page.Height = height;
+        page.Width = XUnit.FromPoint(width);
+        page.Height = XUnit.FromPoint(height);
 
         using (var gfx = XGraphics.FromPdfPage(page))
         {

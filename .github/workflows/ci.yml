@@ -47,4 +47,4 @@ jobs:
           vs-version: '[17.0,18.0)'
 
       - name: Build Shell Extension
-        run: msbuild src/PDFToys.ShellExtension/PDFToys.ShellExtension.vcxproj /p:Configuration=Release /p:Platform=x64
+        run: ./scripts/build-shell-extension.ps1
